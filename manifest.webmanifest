@@ -1,0 +1,19 @@
+{
+  "name": "Dungeon Mania",
+  "short_name": "DungeonMania",
+  "description": "RPG por turnos — dungeons, classes e loot.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "cenario-epico-floresta.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

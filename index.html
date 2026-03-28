@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Dungeon Mania — RPG por turnos. Instale como app no celular ou PC.">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="cenario-epico-floresta.png">
+    <title>Dungeon Mania</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #f59e0b; --red: #f43f5e; --blue: #3b82f6; --green: #10b981; --purple: #8b5cf6;
+            --bg-dark: #020617; --panel: rgba(7, 10, 25, 0.95); --border: rgba(255,255,255,0.1);
+        }
+
+        * { box-sizing: border-box; outline: none; user-select: none; }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg-dark); color: #f8fafc; overflow: hidden; height: 100vh; }
+        
+        .overlay { position: fixed; inset: 0; z-index: 5000; background: radial-gradient(#1e293b, #020617); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .btn-menu { width: 240px; padding: 15px; margin: 10px; background: var(--panel); border: 2px solid var(--border); border-radius: 8px; color: #fff; font-family: 'Cinzel', serif; cursor: pointer; transition: 0.2s; }
+
+        #shop-ui { display: none; }
+        .shop-grid { display: flex; gap: 15px; margin: 25px 0; }
+        .shop-item { background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 15px; border-radius: 12px; width: 180px; transition: 0.3s; cursor: pointer; position: relative; }
+        .shop-item:hover { border-color: var(--gold); transform: translateY(-5px); }
+        .shop-item.sold-out { opacity: 0.3; cursor: not-allowed; transform: none; filter: grayscale(1); }
+        .rarity-legendary { border-color: var(--purple); box-shadow: 0 0 10px var(--purple); }
+
+        #game-ui { display: none; grid-template-columns: 300px 1fr 300px; height: 100vh; padding: 20px; gap: 20px; transition: background 0.4s ease; }
+        .bg-world-1 { background-image: linear-gradient(rgba(2,6,23,0.7), rgba(2,6,23,0.9)), url('cenario-epico-floresta.png'); background-size: cover; background-position: center; }
+        .bg-world-2 { background-image: linear-gradient(rgba(25,15,45,0.82), rgba(8,5,20,0.92)), url('segundo-mundo.png'); background-size: cover; background-position: center; }
+        .bg-world-3 { background-image: linear-gradient(rgba(5,8,14,0.88), rgba(2,3,8,0.95)), url('terceiro-mundo.png'); background-size: cover; background-position: center; }
+
+        #world-select-ui { display: none; flex-direction: column; align-items: center; justify-content: center; }
+        #world-select-ui .world-grid { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; max-width: 900px; margin: 20px 0; }
+        .world-card { width: 240px; min-height: 200px; padding: 18px; background: var(--panel); border: 2px solid var(--border); border-radius: 12px; cursor: pointer; transition: 0.25s; text-align: center; }
+        .world-card:hover:not(.locked) { border-color: var(--gold); transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.45); }
+        .world-card.locked { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
+        .world-card .world-emoji { font-size: 3rem; margin-bottom: 8px; }
+        .world-card .world-sub { font-size: 0.8rem; color: #94a3b8; margin-top: 8px; }
+        .hint-unlock { font-size: 0.85rem; color: #94a3b8; max-width: 420px; margin-top: 8px; }
+
+        .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; height: 100%; overflow: hidden; box-shadow: 0 10px 30px #000; }
+        
+        .combat-arena { display: flex; justify-content: space-around; align-items: flex-end; width: 100%; flex: 1; padding-bottom: 60px; position: relative; }
+        .unit-wrapper { position: relative; width: 240px; display: flex; flex-direction: column; align-items: center; }
+        .platform { width: 220px; height: auto; opacity: 0.6; z-index: 1; image-rendering: pixelated; }
+        .entity-box { position: absolute; bottom: 15px; z-index: 10; display: flex; justify-content: center; align-items: flex-end; }
+
+        #player-sprite { width: 220px; height: 220px; background-image: url('heroi-azul-parado.png'); background-size: contain; background-repeat: no-repeat; background-position: center bottom; image-rendering: pixelated; }
+        /* Coloque o arquivo primeiro-inimigo.png na mesma pasta que index.html */
+        #enemy-sprite { width: 220px; height: 220px; background-image: url('primeiro-inimigo.png'); background-size: contain; background-repeat: no-repeat; background-position: center bottom; image-rendering: pixelated; }
+
+        .bar-container { position: relative; margin: 10px 0; }
+        .bar-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px; font-weight: 800; }
+        .bar-bg { height: 24px; background: linear-gradient(180deg, #0f172a, #020617); border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+        .bar-fill { height: 100%; transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 0 6px 6px 0; box-shadow: 0 0 14px rgba(0,0,0,0.35); }
+        .bar-hp .bar-fill { background: linear-gradient(180deg, #4ade80, #15803d); }
+        .bar-stam .bar-fill { background: linear-gradient(180deg, #60a5fa, #1d4ed8); }
+        .bar-fury .bar-fill { background: linear-gradient(180deg, #c084fc, #6d28d9); }
+        .bar-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 900; text-shadow: 0 1px 2px #000; letter-spacing: 0.02em; }
+
+        #inv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+        .inv-slot { aspect-ratio: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; transition: 0.15s; }
+        .inv-slot:hover:not(.inv-empty) { border-color: var(--gold); background: rgba(245,158,11,0.08); }
+        .inv-slot.inv-empty { cursor: default; opacity: 0.35; }
+        .inv-slot.inv-equipped { border-color: var(--green); box-shadow: 0 0 0 1px rgba(16,185,129,0.35); }
+
+        #equip-panel { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.78rem; flex-shrink: 0; }
+        #equip-panel h4 { font-family: 'Cinzel', serif; color: var(--gold); margin: 0 0 8px; font-size: 0.85rem; }
+        .equip-line { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; color: #cbd5e1; }
+        .equip-line b { color: #f8fafc; }
+        #equip-totals { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); color: #a5b4fc; font-weight: 700; }
+
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 15px; }
+        .btn-act { padding: 16px; border-radius: 8px; border: none; font-weight: 900; cursor: pointer; color: #fff; text-transform: uppercase; font-family: 'Inter'; }
+        .btn-atk { background: linear-gradient(#f43f5e, #881337); box-shadow: 0 4px 0 #4c0519; }
+        .btn-def { background: linear-gradient(#3b82f6, #1e3a8a); box-shadow: 0 4px 0 #172554; }
+        #btn-spec { grid-column: span 2; background: #1e1b4b; opacity: 0.4; cursor: not-allowed; transition: 0.3s; margin-top: 5px; }
+        #btn-spec.ready { opacity: 1; background: var(--purple); cursor: pointer; box-shadow: 0 0 15px var(--purple); }
+        #btn-block.is-blocking { box-shadow: 0 0 16px rgba(59,130,246,0.65); border: 1px solid rgba(147,197,253,0.5); }
+
+        .anim-atk { animation: jump-atk 0.4s ease-out; }
+        .anim-shake { animation: shake 0.3s ease-in-out; }
+        @keyframes jump-atk { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(100px); } }
+        @keyframes shake { 25% { transform: translateX(-10px); filter: brightness(2); } 75% { transform: translateX(10px); } }
+
+        #login-ui { display: flex; z-index: 6000; }
+        #login-ui input { width: 260px; padding: 12px; margin: 6px 0; border-radius: 8px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: #fff; font-family: inherit; }
+        #config-ui { display: none; z-index: 5500; }
+        .btn-small { width: auto; padding: 10px 18px; font-size: 0.85rem; margin: 6px; }
+
+        #hud-top { position: fixed; top: 10px; right: 10px; z-index: 4500; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: min(96vw, 420px); }
+        #hud-top button { padding: 8px 12px; font-size: 0.72rem; font-weight: 800; font-family: 'Inter', sans-serif; border-radius: 8px; border: 1px solid var(--border); background: rgba(7,10,25,0.92); color: #e2e8f0; cursor: pointer; transition: 0.15s; }
+        #hud-top button:hover { border-color: var(--gold); color: #fff; }
+        #btn-advance-world { border-color: #a78bfa !important; color: #e9d5ff !important; }
+
+        #pause-overlay, #gameover-overlay, #world-advance-overlay { display: none; z-index: 5800; }
+        #pause-overlay, #gameover-overlay, #world-advance-overlay.overlay-dim { background: rgba(2,6,23,0.92); }
+    </style>
+</head>
+<body>
+
+<div id="login-ui" class="overlay">
+    <h1 style="font-family:'Cinzel'; font-size: 2rem; color:var(--gold);">DUNGEON MANIA</h1>
+    <p style="color:#94a3b8; max-width:320px;">Entre para salvar progresso neste aparelho.</p>
+    <input type="text" id="login-user" placeholder="Usuário" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Senha" autocomplete="current-password">
+    <button class="btn-menu" onclick="tryLogin()">ENTRAR</button>
+    <button class="btn-menu btn-small" onclick="tryRegister()" style="border-color:var(--blue);">CRIAR CONTA</button>
+    <p style="font-size:0.75rem; color:#64748b; margin-top:16px;">Conta padrão: <b>admin</b> / <b>admin</b> (acesso a configurações)</p>
+</div>
+
+<div id="config-ui" class="overlay">
+    <h2 style="font-family:'Cinzel'; color:var(--gold);">CONFIGURAÇÕES (ADMIN)</h2>
+    <p style="color:#94a3b8; max-width:420px;">Painel local v16 — dados em <code style="color:#a5b4fc;">localStorage</code> via <code style="color:#a5b4fc;">js/db.js</code>.</p>
+    <pre id="config-dump" style="text-align:left; background:rgba(0,0,0,0.45); padding:12px; border-radius:8px; font-size:0.75rem; max-width:480px; overflow:auto; max-height:40vh; color:#cbd5e1;"></pre>
+    <button class="btn-menu" onclick="closeConfig()">FECHAR</button>
+</div>
+
+<div id="menu-main" class="overlay" style="display:none;">
+    <h1 style="font-family:'Cinzel'; font-size: 3rem; color:var(--gold);">DUNGEON MANIA</h1>
+    <button class="btn-menu" onclick="startGame('new')">NOVO JOGO</button>
+    <button class="btn-menu" id="btn-cont" onclick="startGame('continue')" style="display:none;">CONTINUAR</button>
+    <button class="btn-menu" id="btn-worlds" onclick="openWorldSelect()" style="border-color: var(--purple);">MUNDOS</button>
+    <button class="btn-menu" id="btn-config" onclick="openConfig()" style="display:none; border-color: var(--gold);">CONFIG</button>
+    <button class="btn-menu" onclick="doLogout()" style="border-color:#64748b;">SAIR</button>
+    <p id="menu-world-hint" class="hint-unlock">Mundo 2: <b id="hint-w2">20</b> abates na Floresta · Mundo 3: <b id="hint-w3">25</b> abates no Reino Mágico.</p>
+</div>
+
+<div id="world-select-ui" class="overlay">
+    <h2 style="font-family:'Cinzel'; color:var(--gold); margin:0 0 8px;">ESCOLHA O MUNDO</h2>
+    <p style="margin:0 0 16px; color:#94a3b8;">Cada mundo tem salas e desafios próprios.</p>
+    <div id="world-cards" class="world-grid"></div>
+    <button class="btn-menu" onclick="closeWorldSelect()" style="margin-top:12px;">VOLTAR</button>
+</div>
+
+<div id="shop-ui" class="overlay">
+    <div style="font-size: 5rem; margin-bottom: 10px;">🧙‍♂️</div>
+    <h2 style="font-family:'Cinzel'; color:var(--gold); margin:0;">MAGO MERCANTE</h2>
+    <p>Escolha com sabedoria, forasteiro...</p>
+    <div id="shop-items" class="shop-grid"></div>
+    <p>Seu Ouro: <b id="shop-gold-val" style="color:var(--gold)">0</b></p>
+    <button class="btn-menu" onclick="closeShop()" style="width: 300px; border-color: var(--green);">CONTINUAR JORNADA</button>
+</div>
+
+<div id="hud-top">
+    <button type="button" onclick="togglePause()" title="Pausa">⏸ PAUSA</button>
+    <button type="button" onclick="saveAndReturnMenu()" title="Salvar e voltar">💾 SALVAR / MENU</button>
+    <button type="button" id="btn-advance-world" onclick="openWorldAdvanceFromButton()" style="display:none;" title="Próximo mundo">➜ PRÓXIMO MUNDO</button>
+</div>
+
+<div id="pause-overlay" class="overlay overlay-dim">
+    <h2 style="font-family:'Cinzel'; color:var(--gold);">PAUSADO</h2>
+    <p style="color:#94a3b8; max-width:320px;">O combate está congelado.</p>
+    <button class="btn-menu" onclick="togglePause()">CONTINUAR</button>
+    <button class="btn-menu" onclick="saveAndReturnMenu()" style="border-color:var(--green);">SALVAR E MENU</button>
+</div>
+
+<div id="gameover-overlay" class="overlay overlay-dim">
+    <h2 style="font-family:'Cinzel'; color:var(--red);">VOCÊ CAIU</h2>
+    <p style="color:#94a3b8; max-width:340px;">Tente a mesma sala de novo ou volte ao menu (progresso salvo até a última vitória).</p>
+    <button class="btn-menu" onclick="gameOverRetry()" style="border-color:var(--gold);">TENTAR DE NOVO</button>
+    <button class="btn-menu" onclick="gameOverToMenu()">VOLTAR AO MENU</button>
+</div>
+
+<div id="world-advance-overlay" class="overlay overlay-dim">
+    <h2 id="world-advance-title" style="font-family:'Cinzel'; color:var(--gold);">NOVO MUNDO</h2>
+    <p id="world-advance-text" style="color:#cbd5e1; max-width:400px; line-height:1.5;"></p>
+    <button class="btn-menu" onclick="confirmWorldAdvance()" style="border-color:var(--purple);">AVANÇAR AGORA</button>
+    <button class="btn-menu" onclick="dismissWorldAdvance()">CONTINUAR AQUI (INFINITO)</button>
+</div>
+
+<div id="game-ui" class="bg-world-1">
+    <aside class="panel" style="overflow-y:auto;">
+        <h3 style="font-family:'Cinzel'; color:var(--gold); margin:0;">DIÁRIO</h3>
+        <p>SALA: <b id="ui-stage">1</b></p>
+        <p>OURO: <span id="ui-gold" style="color:var(--gold)">0</span></p>
+        <p style="font-size:0.85rem;">STREAK: <b id="ui-streak" style="color:#fbbf24;">0</b> · Sorte loot: <b id="ui-luck" style="color:#a78bfa;">0%</b></p>
+        <div id="log" style="flex:1; background:rgba(0,0,0,0.5); padding:12px; overflow-y:auto; font-size:0.85rem; border-radius:8px; border:1px solid var(--border); color: #cbd5e1;"></div>
+    </aside>
+
+    <main class="panel" style="background:transparent; border:none; justify-content:space-between; align-items:center;">
+        <div style="text-align:center;">
+            <div id="ui-world-label" style="font-family:'Cinzel'; letter-spacing:4px; opacity:0.6;">MUNDO 1 — FLORESTA</div>
+            <p id="ui-world-next" style="font-size:0.72rem; opacity:0.75; margin:6px 0 0; letter-spacing:0.5px; color:#94a3b8; max-width:520px;"></p>
+        </div>
+        <div class="combat-arena">
+            <div class="unit-wrapper">
+                <div id="p-box" class="entity-box"><div id="player-sprite"></div></div>
+                <img class="platform" src="plataforma-azul.png">
+            </div>
+            <div class="unit-wrapper">
+                <!-- Salve primeiro-inimigo.png na mesma pasta que index.html -->
+                <div id="e-box" class="entity-box"><div id="enemy-sprite"></div></div>
+                <img class="platform" src="plataforma-vermelha.png">
+            </div>
+        </div>
+        <div style="width:100%; text-align:center;">
+            <h2 id="e-name" style="margin:0; font-family:'Cinzel'; color:var(--red);">INIMIGO</h2>
+            <div class="bar-container bar-hp" style="width:85%; margin: 5px auto;">
+                <div class="bar-bg"><div id="e-hp-bar" class="bar-fill" style="background:linear-gradient(180deg,#fb7185,#be123c);"></div></div>
+                <div class="bar-text" id="e-hp-text">0 / 0</div>
+            </div>
+            <div class="actions">
+                <button class="btn-act btn-atk" onclick="doAction('attack')">ATACAR</button>
+                <button class="btn-act btn-def" id="btn-block">BLOQUEAR</button>
+                <button id="btn-spec" class="btn-act" onclick="doAction('special')">ULTI</button>
+            </div>
+        </div>
+    </main>
+
+    <aside class="panel" style="overflow-y:auto;">
+        <h3 style="font-family:'Cinzel'; color:var(--green); margin:0;">STATUS</h3>
+        <p id="ui-class-name" style="font-size:0.75rem; color:#a5b4fc; margin:4px 0 8px;">Classe: —</p>
+        <div class="bar-label">Vida</div>
+        <div class="bar-container bar-hp"><div class="bar-bg"><div id="hp-bar" class="bar-fill"></div></div><div class="bar-text" id="hp-text">120/120</div></div>
+        <div class="bar-label">Stamina</div>
+        <div class="bar-container bar-stam"><div class="bar-bg"><div id="stam-bar" class="bar-fill"></div></div><div class="bar-text" id="stam-text">100/100</div></div>
+        <div class="bar-label">Fúria</div>
+        <div class="bar-container bar-fury"><div class="bar-bg"><div id="fury-bar" class="bar-fill"></div></div><div class="bar-text" id="fury-text">0%</div></div>
+        <p style="font-size:0.9rem; margin:10px 0;">ATK: <b id="ui-atk">25</b> | DEF: <b id="ui-def">10</b></p>
+        <hr style="width:100%; opacity:0.1; margin:10px 0;">
+        <h3 style="font-family:'Cinzel'; color:var(--gold); margin:0;">INVENTÁRIO</h3>
+        <p style="font-size:0.72rem; color:#94a3b8; margin:4px 0 0;">Toque no item: equipar / desequipar · poções usam na hora.</p>
+        <div id="inv-grid"></div>
+        <div id="equip-panel">
+            <h4>EQUIPADO</h4>
+            <div id="equip-slots"></div>
+            <div id="equip-totals"></div>
+        </div>
+    </aside>
+</div>
+
+<script src="js/db.js"></script>
+<script>
+    const SAVE_KEY = 'dm_v16_save';
+    const SAVE_LEGACY = 'dm_v31';
+
+    /** Desbloqueio por abates (persistente em DMDB.global). */
+    const WORLD2_UNLOCK_KILLS = 20;
+    const WORLD3_UNLOCK_KILLS = 25;
+
+    const WORLDS = [
+        { id: 1, slug: 'floresta', name: 'Floresta', emoji: '🌲', bgClass: 'bg-world-1', enemyPrefix: 'Selva' },
+        { id: 2, slug: 'reino_magico', name: 'Reino Mágico', emoji: '✨', bgClass: 'bg-world-2', enemyPrefix: 'Arcano' },
+        { id: 3, slug: 'mundo_vazio', name: 'Mundo Vazio', emoji: '⬛', bgClass: 'bg-world-3', enemyPrefix: 'Vazio' }
+    ];
+
+    /**
+     * Balance v16: Herói = referência. Arqueiro = dano/stamina altos, frágil.
+     * Cavaleiro = médio sólido. Tank = sobrevivência, golpes mais pesados (custo maior).
+     * blockStamRegen = stamina/seg ao segurar bloqueio · furyBlockPerSec = fúria/seg bloqueando
+     */
+    const classesDb = [
+        { id: 'heroi', name: 'Herói', sprite: 'heroi-azul-parado.png', baseAtk: 22, baseDef: 11, baseMHp: 110, stamMax: 100, stamRegen: 9, blockStamRegen: 10, atkCost: 12, furyBlockPerSec: 2.5 },
+        { id: 'arqueiro', name: 'Arqueiro', sprite: 'arqueiro.png', baseAtk: 30, baseDef: 5, baseMHp: 82, stamMax: 100, stamRegen: 12, blockStamRegen: 9, atkCost: 10, furyBlockPerSec: 2 },
+        { id: 'cavaleiro', name: 'Cavaleiro', sprite: 'cavaleiro.png', baseAtk: 24, baseDef: 14, baseMHp: 128, stamMax: 100, stamRegen: 8, blockStamRegen: 11, atkCost: 12, furyBlockPerSec: 3 },
+        { id: 'tank', name: 'Tank', sprite: 'tank.png', baseAtk: 18, baseDef: 19, baseMHp: 158, stamMax: 100, stamRegen: 6, blockStamRegen: 14, atkCost: 14, furyBlockPerSec: 4 }
+    ];
+
+    function getClassById(id) { return classesDb.find(c => c.id === id) || classesDb[0]; }
+
+    function getSaveRaw() {
+        return localStorage.getItem(SAVE_KEY) || localStorage.getItem(SAVE_LEGACY);
+    }
+
+    function defaultPlayer(worldId) {
+        return {
+            hp: 110, mHp: 110, baseAtk: 22, baseDef: 11, baseMHp: 110,
+            atk: 22, def: 11, gold: 55, stage: 1, stam: 100, fury: 0,
+            stamMax: 100, stamRegen: 9, blockStamRegen: 10, atkStamCost: 12, furyBlockPerSec: 2.5,
+            killStreak: 0, totalKillsLifetime: 0,
+            classId: 'heroi', ownedClasses: ['heroi'],
+            inv: [{ id: 'espada_inicial' }],
+            equipped: { weapon: 0, armor: null, accessory: null },
+            alive: true, world: worldId || 1, maxStageReached: 1
+        };
+    }
+
+    function applyClassBase(target) {
+        const pl = target || p;
+        const c = getClassById(pl.classId);
+        pl.baseAtk = c.baseAtk;
+        pl.baseDef = c.baseDef;
+        pl.baseMHp = c.baseMHp;
+        pl.stamMax = c.stamMax;
+        pl.stamRegen = c.stamRegen;
+        pl.blockStamRegen = c.blockStamRegen != null ? c.blockStamRegen : 10;
+        pl.atkStamCost = c.atkCost;
+        pl.furyBlockPerSec = c.furyBlockPerSec != null ? c.furyBlockPerSec : 2.5;
+        pl.stam = Math.min(pl.stamMax, pl.stam != null ? pl.stam : pl.stamMax);
+    }
+
+    function getLootLuckPercent() {
+        const k = p.totalKillsLifetime || 0;
+        const w = (p.world || 1) - 1;
+        return Math.min(12, Math.round((k * 0.015 + w * 1.1) * 10) / 10);
+    }
+
+    function rollLootOnKill() {
+        const D = getWorldDifficultyMult(p.world || 1);
+        const luckRoll = Math.min(0.13, getLootLuckPercent() / 80) * D.loot;
+        if (Math.random() > 0.27 + luckRoll) return;
+        if (Math.random() < 0.58) {
+            const g = Math.floor((10 + Math.random() * (14 + p.stage * 2 + p.world * 4)) * D.gold);
+            p.gold += g;
+            addLog(`Loot: +${g} ouro`, '#fbbf24');
+            return;
+        }
+        const poolAll = itemsDb.filter(it => it.slot !== 'class' && it.id !== 'espada_inicial' && it.price > 0);
+        const roll = Math.random();
+        let pool;
+        if (roll > 0.92) pool = poolAll.filter(it => it.price >= 250);
+        else if (roll > 0.72) pool = poolAll.filter(it => it.price >= 90 && it.price < 250);
+        else if (roll > 0.38) pool = poolAll.filter(it => it.price >= 35 && it.price < 150);
+        else pool = poolAll.filter(it => it.price <= 55);
+        if (!pool.length) pool = poolAll.filter(it => it.slot === 'consumable');
+        if (!pool.length) pool = poolAll.slice();
+        if (!pool.length) return;
+        const item = pool[Math.floor(Math.random() * pool.length)];
+        if (p.inv.length >= 12) {
+            addLog('Loot: inventário cheio — item perdido!', '#64748b');
+            return;
+        }
+        p.inv.push({ id: item.id });
+        addLog(`Loot: ${item.icon} ${item.name}!`, '#c4b5fd');
+    }
+
+    function applyPlayerSprite() {
+        const c = getClassById(p.classId);
+        const el = document.getElementById('player-sprite');
+        if (el) el.style.backgroundImage = `url('${c.sprite}')`;
+    }
+
+    let p = defaultPlayer(1);
+    let e = { hp: 0, mHp: 0, dmg: 0, alive: false };
+    let isDef = false, turnTimer, shopOpen = false;
+    let gamePaused = false;
+    let pendingAdvanceTarget = null;
+
+    /** Próximos mundos: mais HP/dano inimigo, ouro/loot melhores, curva mais lenta (slow). */
+    const WORLD_DIFF_MULT = {
+        1: { hp: 1, dmg: 1, gold: 1, loot: 1, slow: 1 },
+        2: { hp: 1.3, dmg: 1.12, gold: 1.22, loot: 1.18, slow: 1.12 },
+        3: { hp: 1.58, dmg: 1.22, gold: 1.42, loot: 1.35, slow: 1.2 }
+    };
+
+    function getWorldDifficultyMult(world) {
+        return WORLD_DIFF_MULT[world] || WORLD_DIFF_MULT[1];
+    }
+
+    const itemsDb = [
+        { id: 'espada_inicial', name: 'Espada Inicial', icon: '⚔️', price: 0, rarity: 1, slot: 'weapon', bonusAtk: 0, bonusDef: 0, bonusMHp: 0 },
+        { id: 'pocao', name: 'Poção Vida', icon: '🧪', price: 28, rarity: 0.6, slot: 'consumable', heal: 42 },
+        { id: 'amuleto', name: 'Amuleto', icon: '📿', price: 48, rarity: 0.6, slot: 'accessory', bonusAtk: 0, bonusDef: 4, bonusMHp: 0 },
+        { id: 'espada_aco', name: 'Espada Aço', icon: '🗡️', price: 115, rarity: 0.3, slot: 'weapon', bonusAtk: 8, bonusDef: 0, bonusMHp: 0 },
+        { id: 'escudo_rei', name: 'Escudo Rei', icon: '🛡️', price: 145, rarity: 0.3, slot: 'armor', bonusAtk: 0, bonusDef: 5, bonusMHp: 0 },
+        { id: 'excalibur', name: 'Excalibur', icon: '✨', price: 380, rarity: 0.1, slot: 'weapon', bonusAtk: 13, bonusDef: 0, bonusMHp: 0 },
+        { id: 'buy_class_arqueiro', name: 'Treino: Arqueiro', icon: '🏹', price: 300, rarity: 0.4, slot: 'class', classId: 'arqueiro' },
+        { id: 'buy_class_cavaleiro', name: 'Treino: Cavaleiro', icon: '⚜️', price: 275, rarity: 0.42, slot: 'class', classId: 'cavaleiro' },
+        { id: 'buy_class_tank', name: 'Treino: Tank', icon: '🧱', price: 320, rarity: 0.38, slot: 'class', classId: 'tank' }
+    ];
+
+    const iconToId = { '🧪': 'pocao', '📿': 'amuleto', '🗡️': 'espada_aco', '🛡️': 'escudo_rei', '✨': 'excalibur', '⚔️': 'espada_inicial' };
+
+    function getItemById(id) { return itemsDb.find(x => x.id === id); }
+
+    function equipSlotKeyForItem(it) {
+        if (!it) return null;
+        if (it.slot === 'class') return null;
+        if (it.slot === 'weapon') return 'weapon';
+        if (it.slot === 'armor') return 'armor';
+        if (it.slot === 'accessory') return 'accessory';
+        return null;
+    }
+
+    function fixEquippedIndicesAfterRemove(removedIndex) {
+        if (!p.equipped) return;
+        ['weapon', 'armor', 'accessory'].forEach(s => {
+            const v = p.equipped[s];
+            if (v == null) return;
+            if (v === removedIndex) p.equipped[s] = null;
+            else if (v > removedIndex) p.equipped[s] = v - 1;
+        });
+    }
+
+    function isInvIndexEquipped(idx) {
+        if (!p.equipped) return false;
+        return p.equipped.weapon === idx || p.equipped.armor === idx || p.equipped.accessory === idx;
+    }
+
+    function recalcStats(player) {
+        const pl = player || p;
+        if (pl.baseAtk == null) pl.baseAtk = 25;
+        if (pl.baseDef == null) pl.baseDef = 10;
+        if (pl.baseMHp == null) pl.baseMHp = 120;
+        if (!pl.equipped) pl.equipped = { weapon: null, armor: null, accessory: null };
+
+        let atk = pl.baseAtk, def = pl.baseDef, mhp = pl.baseMHp;
+
+        ['weapon', 'armor', 'accessory'].forEach(slot => {
+            const idx = pl.equipped[slot];
+            if (idx == null) return;
+            const cell = pl.inv[idx];
+            if (!cell || !cell.id) return;
+            const it = getItemById(cell.id);
+            const sk = equipSlotKeyForItem(it);
+            if (!it || sk !== slot) return;
+            atk += it.bonusAtk || 0;
+            def += it.bonusDef || 0;
+            mhp += it.bonusMHp || 0;
+        });
+
+        const prevM = pl.mHp || 1;
+        pl.atk = atk;
+        pl.def = def;
+        pl.mHp = Math.max(1, mhp);
+        pl.hp = Math.min(pl.hp, pl.mHp);
+        if (prevM !== pl.mHp && prevM > 0) {
+            const ratio = pl.mHp / prevM;
+            pl.hp = Math.min(pl.mHp, Math.max(1, Math.floor(pl.hp * ratio)));
+        }
+    }
+
+    function migratePlayer(raw) {
+        const o = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (o.world == null) o.world = 1;
+        if (o.maxStageReached == null) o.maxStageReached = Math.max(1, o.stage || 1);
+        if (!o.classId) o.classId = 'heroi';
+        if (!o.ownedClasses || !o.ownedClasses.length) o.ownedClasses = ['heroi'];
+        if (o.killStreak == null) o.killStreak = 0;
+        if (o.totalKillsLifetime == null) o.totalKillsLifetime = 0;
+
+        if (!o.inv || !o.inv.length) o.inv = [{ id: 'espada_inicial' }];
+        else {
+            o.inv = o.inv.map(c => {
+                if (typeof c === 'string') return { id: iconToId[c] || 'espada_inicial' };
+                if (c && c.id && getItemById(c.id)) return { id: c.id };
+                return { id: 'espada_inicial' };
+            });
+        }
+
+        if (!o.equipped) o.equipped = { weapon: null, armor: null, accessory: null };
+
+        applyClassBase(o);
+
+        const wi = o.inv.findIndex(c => getItemById(c.id) && getItemById(c.id).slot === 'weapon');
+        if (o.equipped.weapon == null && wi >= 0) o.equipped.weapon = wi;
+
+        recalcStats(o);
+        return o;
+    }
+
+    function getWorldMeta(id) {
+        return WORLDS.find(w => w.id === id) || WORLDS[0];
+    }
+
+    function bumpMaxStage() {
+        p.maxStageReached = Math.max(p.maxStageReached || 1, p.stage || 1);
+    }
+
+    function carryOverMaxStageFromSave() {
+        const raw = getSaveRaw();
+        if (!raw) return;
+        try {
+            const o = migratePlayer(raw);
+            p.maxStageReached = Math.max(p.maxStageReached || 1, o.maxStageReached || 1, o.stage || 1);
+        } catch (err) { /* ignore */ }
+    }
+
+    let stamRegenStarted = false;
+    function ensureStamRegen() {
+        if (stamRegenStarted) return;
+        stamRegenStarted = true;
+        setInterval(() => {
+            if (p.alive && !shopOpen && !gamePaused) {
+                const mx = p.stamMax != null ? p.stamMax : 100;
+                if (isDef) {
+                    const br = p.blockStamRegen != null ? p.blockStamRegen : 10;
+                    p.stam = Math.min(mx, p.stam + br);
+                    const furyBlk = p.furyBlockPerSec != null ? p.furyBlockPerSec : 2.5;
+                    p.fury = Math.min(100, p.fury + furyBlk);
+                } else {
+                    const reg = p.stamRegen != null ? p.stamRegen : 10;
+                    p.stam = Math.min(mx, p.stam + reg);
+                }
+            }
+            updateUI();
+        }, 1000);
+    }
+
+    function applyWorldTheme() {
+        const meta = getWorldMeta(p.world);
+        const gameUi = document.getElementById('game-ui');
+        WORLDS.forEach(w => gameUi.classList.remove(w.bgClass));
+        gameUi.classList.add(meta.bgClass);
+        document.getElementById('ui-world-label').innerText = `MUNDO ${meta.id} — ${meta.name.toUpperCase()}`;
+        updateWorldProgressLine();
+    }
+
+    function updateWorldProgressLine() {
+        const el = document.getElementById('ui-world-next');
+        if (!el || typeof DMDB === 'undefined') return;
+        const g = DMDB.getGlobal();
+        const k1 = g.killsW1 || 0;
+        const k2 = g.killsW2 || 0;
+        if (k1 < WORLD2_UNLOCK_KILLS) {
+            el.textContent = `Reino Mágico: faltam ${WORLD2_UNLOCK_KILLS - k1} abate(s) na Floresta (progresso ${k1}/${WORLD2_UNLOCK_KILLS}).`;
+        } else if (k2 < WORLD3_UNLOCK_KILLS) {
+            el.textContent = `Mundo Vazio: faltam ${WORLD3_UNLOCK_KILLS - k2} abate(s) no Reino Mágico (progresso ${k2}/${WORLD3_UNLOCK_KILLS}).`;
+        } else {
+            el.textContent = 'Todos os mundos desbloqueados por abates — bom jogo!';
+        }
+    }
+
+    function updateMenuWorldButtons() {
+        const h2 = document.getElementById('hint-w2');
+        const h3 = document.getElementById('hint-w3');
+        if (h2) h2.textContent = WORLD2_UNLOCK_KILLS;
+        if (h3) h3.textContent = WORLD3_UNLOCK_KILLS;
+        const cfg = document.getElementById('btn-config');
+        if (cfg && typeof DMDB !== 'undefined') cfg.style.display = DMDB.isAdmin() ? 'block' : 'none';
+    }
+
+    function openWorldSelect() {
+        document.getElementById('menu-main').style.display = 'none';
+        document.getElementById('world-select-ui').style.display = 'flex';
+        renderWorldCards();
+    }
+
+    function closeWorldSelect() {
+        document.getElementById('world-select-ui').style.display = 'none';
+        document.getElementById('menu-main').style.display = 'flex';
+    }
+
+    function renderWorldCards() {
+        const g = typeof DMDB !== 'undefined' ? DMDB.getGlobal() : { killsW1: 0, killsW2: 0 };
+        const k1 = g.killsW1 || 0;
+        const k2 = g.killsW2 || 0;
+        const host = document.getElementById('world-cards');
+        host.innerHTML = '';
+        WORLDS.forEach(w => {
+            let locked = false;
+            let sub = 'Disponível';
+            if (w.id === 2) {
+                locked = k1 < WORLD2_UNLOCK_KILLS;
+                sub = locked ? `Mate ${WORLD2_UNLOCK_KILLS} inimigos na Floresta (${k1}/${WORLD2_UNLOCK_KILLS})` : 'Desbloqueado';
+            } else if (w.id === 3) {
+                locked = k2 < WORLD3_UNLOCK_KILLS;
+                sub = locked ? `Mate ${WORLD3_UNLOCK_KILLS} no Reino Mágico (${k2}/${WORLD3_UNLOCK_KILLS})` : 'Desbloqueado';
+            }
+            const div = document.createElement('div');
+            div.className = 'world-card' + (locked ? ' locked' : '');
+            div.innerHTML = `<div class="world-emoji">${w.emoji}</div><b style="font-family:Cinzel">${w.name}</b><div class="world-sub">${sub}</div>`;
+            if (!locked) div.onclick = () => beginAdventureInWorld(w.id);
+            host.appendChild(div);
+        });
+    }
+
+    function beginAdventureInWorld(worldId) {
+        const g = DMDB.getGlobal();
+        if (worldId === 2 && (g.killsW1 || 0) < WORLD2_UNLOCK_KILLS) return;
+        if (worldId === 3 && (g.killsW2 || 0) < WORLD3_UNLOCK_KILLS) return;
+        const raw = getSaveRaw();
+        p = defaultPlayer(worldId);
+        if (raw) {
+            try {
+                const o = JSON.parse(raw);
+                if (o.classId) p.classId = o.classId;
+                if (o.ownedClasses && o.ownedClasses.length) p.ownedClasses = o.ownedClasses.slice();
+                if (o.totalKillsLifetime != null) p.totalKillsLifetime = o.totalKillsLifetime;
+                p.killStreak = 0;
+                applyClassBase();
+            } catch (err) { /* ignore */ }
+        }
+        carryOverMaxStageFromSave();
+        bumpMaxStage();
+        document.getElementById('world-select-ui').style.display = 'none';
+        enterGameSession();
+    }
+
+    function enterGameSession() {
+        p.alive = true;
+        gamePaused = false;
+        document.getElementById('pause-overlay').style.display = 'none';
+        document.getElementById('gameover-overlay').style.display = 'none';
+        document.getElementById('world-advance-overlay').style.display = 'none';
+        applyClassBase();
+        recalcStats();
+        document.getElementById('menu-main').style.display = 'none';
+        document.getElementById('world-select-ui').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'grid';
+        setHudVisible(true);
+        applyWorldTheme();
+        applyPlayerSprite();
+        ensureStamRegen();
+        spawn();
+        syncAdvanceButton();
+    }
+
+    function showMainMenu() {
+        setHudVisible(false);
+        document.getElementById('login-ui').style.display = 'none';
+        document.getElementById('menu-main').style.display = 'flex';
+        if (getSaveRaw()) document.getElementById('btn-cont').style.display = 'block';
+        else document.getElementById('btn-cont').style.display = 'none';
+        updateMenuWorldButtons();
+    }
+
+    function tryLogin() {
+        const u = document.getElementById('login-user').value.trim();
+        const pw = document.getElementById('login-pass').value;
+        const r = DMDB.login(u, pw);
+        if (!r.ok) { alert(r.error); return; }
+        showMainMenu();
+    }
+
+    function tryRegister() {
+        const u = document.getElementById('login-user').value.trim();
+        const pw = document.getElementById('login-pass').value;
+        if (u.length < 2 || pw.length < 2) { alert('Usuário e senha precisam de pelo menos 2 caracteres.'); return; }
+        const r = DMDB.register(u, pw);
+        if (!r.ok) { alert(r.error); return; }
+        alert('Conta criada. Entre com seu usuário e senha.');
+    }
+
+    function doLogout() {
+        DMDB.logout();
+        location.reload();
+    }
+
+    function openConfig() {
+        if (!DMDB.isAdmin()) return;
+        const pre = document.getElementById('config-dump');
+        const db = {
+            global: DMDB.getGlobal(),
+            users: DMDB.getUsers().map(u => ({ name: u.name, role: u.role })),
+            saveExists: !!getSaveRaw()
+        };
+        pre.textContent = JSON.stringify(db, null, 2);
+        document.getElementById('config-ui').style.display = 'flex';
+    }
+
+    function closeConfig() {
+        document.getElementById('config-ui').style.display = 'none';
+    }
+
+    window.onload = () => {
+        DMDB.init();
+        document.getElementById('hint-w2').textContent = WORLD2_UNLOCK_KILLS;
+        document.getElementById('hint-w3').textContent = WORLD3_UNLOCK_KILLS;
+        if (DMDB.getSession()) showMainMenu();
+        else {
+            document.getElementById('login-ui').style.display = 'flex';
+            document.getElementById('menu-main').style.display = 'none';
+        }
+        updateMenuWorldButtons();
+        const b = document.getElementById('btn-block');
+        ['mousedown', 'touchstart'].forEach(ev => b.addEventListener(ev, () => isDef = true));
+        ['mouseup', 'mouseleave', 'touchend'].forEach(ev => b.addEventListener(ev, () => isDef = false));
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+    };
+
+    function startGame(mode) {
+        if (mode === 'continue') {
+            const raw = getSaveRaw();
+            if (!raw) return;
+            p = migratePlayer(raw);
+            bumpMaxStage();
+            enterGameSession();
+        } else {
+            p = defaultPlayer(1);
+            const rawMeta = getSaveRaw();
+            if (rawMeta) {
+                try {
+                    const o = JSON.parse(rawMeta);
+                    if (o.totalKillsLifetime != null) p.totalKillsLifetime = o.totalKillsLifetime;
+                } catch (e) { /* ignore */ }
+            }
+            carryOverMaxStageFromSave();
+            bumpMaxStage();
+            enterGameSession();
+        }
+    }
+
+    function computeEnemyStats() {
+        const s = p.stage || 1;
+        const w = p.world || 1;
+        const D = getWorldDifficultyMult(w);
+        const slowExtra = 1 + (D.slow - 1) * Math.min(30, s) * 0.035;
+        const growth = (28 + s * 11 + (s * s) * 0.12) * slowExtra;
+        const wMult = 1 + (w - 1) * 0.22;
+        const mHp = Math.floor(growth * wMult * D.hp);
+        const baseDmg = 5.5 + s * 1.15 + (w - 1) * 2.4;
+        const dmg = Math.max(4, Math.floor(baseDmg * (1 + (w - 1) * 0.08) * D.dmg));
+        return { mHp, dmg };
+    }
+
+    function spawn() {
+        if(!p.alive || gamePaused) return;
+        if(p.stage > 1 && p.stage % 5 === 0) { openShop(); updateUI(); return; }
+        e.alive = true;
+        const meta = getWorldMeta(p.world);
+        const st = computeEnemyStats();
+        e.mHp = st.mHp; e.hp = e.mHp;
+        e.dmg = st.dmg;
+        document.getElementById('e-name').innerText = meta.enemyPrefix + " · SALA " + p.stage;
+        addLog(`${meta.name} — Sala ${p.stage}: combate!`, '#fff');
+        enemyTurn();
+        updateUI();
+    }
+
+    function openShop() {
+        shopOpen = true;
+        e.alive = false;
+        clearTimeout(turnTimer);
+        document.getElementById('shop-ui').style.display = 'flex';
+        document.getElementById('shop-gold-val').innerText = p.gold;
+        const grid = document.getElementById('shop-items');
+        grid.innerHTML = '';
+
+        const offers = [];
+        const classPool = itemsDb.filter(it => it.slot === 'class' && it.price > 0 && (!p.ownedClasses || !p.ownedClasses.includes(it.classId)));
+        if (classPool.length) {
+            offers.push(classPool[Math.floor(Math.random() * classPool.length)]);
+        }
+        let guard = 0;
+        while (offers.length < 3 && guard++ < 50) {
+            const rnd = Math.random();
+            let pool = itemsDb.filter(it => it.price > 0 && it.slot !== 'class' && it.rarity >= (rnd - 0.5));
+            if (!pool.length) pool = itemsDb.filter(it => it.price > 0 && it.slot !== 'class');
+            const item = pool[Math.floor(Math.random() * pool.length)];
+            if (item && !offers.some(o => o.id === item.id)) offers.push(item);
+        }
+        const nonClass = itemsDb.filter(it => it.price > 0 && it.slot !== 'class');
+        while (offers.length < 3 && nonClass.length) {
+            const fb = nonClass[offers.length % nonClass.length];
+            if (!offers.some(o => o.id === fb.id)) offers.push(fb);
+            else break;
+        }
+        offers.sort(() => Math.random() - 0.5);
+
+        offers.forEach(item => {
+            const div = document.createElement('div');
+            div.className = `shop-item ${item.rarity < 0.2 ? 'rarity-legendary' : ''}`;
+            const tag = item.slot === 'class' ? '<br><small style="color:#a78bfa">Classe</small>' : '';
+            div.innerHTML = `<div style="font-size:2rem">${item.icon}</div><b>${item.name}</b>${tag}<br><span style="color:var(--gold)">💰 ${item.price}</span>`;
+            div.onclick = () => buyItem(item, div);
+            grid.appendChild(div);
+        });
+    }
+
+    function buyItem(it, element) {
+        if (element.classList.contains('sold-out')) return;
+
+        if (it.slot === 'class') {
+            if (p.ownedClasses && p.ownedClasses.includes(it.classId)) {
+                addLog('Você já domina esta classe!', '#f59e0b');
+                return;
+            }
+            if (p.gold < it.price) {
+                addLog('Ouro insuficiente!', '#f43f5e');
+                return;
+            }
+            p.gold -= it.price;
+            p.ownedClasses = p.ownedClasses || ['heroi'];
+            if (!p.ownedClasses.includes(it.classId)) p.ownedClasses.push(it.classId);
+            p.classId = it.classId;
+            applyClassBase();
+            recalcStats();
+            applyPlayerSprite();
+            element.classList.add('sold-out');
+            element.innerHTML = `<div style="font-size:2rem">🚫</div><b>ESGOTADO</b><br><span style="color:#666">COMPRADO</span>`;
+            document.getElementById('shop-gold-val').innerText = p.gold;
+            addLog(`Classe adquirida: ${getClassById(it.classId).name}!`, '#a78bfa');
+            save();
+            updateUI();
+            return;
+        }
+
+        if (p.gold >= it.price && p.inv.length < 12) {
+            p.gold -= it.price;
+            p.inv.push({ id: it.id });
+            element.classList.add('sold-out');
+            element.innerHTML = `<div style="font-size:2rem">🚫</div><b>ESGOTADO</b><br><span style="color:#666">COMPRADO</span>`;
+            document.getElementById('shop-gold-val').innerText = p.gold;
+            addLog(`Você comprou ${it.name}! (equipe ou use no inventário)`, '#10b981');
+            recalcStats();
+            save();
+            updateUI();
+        } else {
+            addLog('Ouro insuficiente ou mochila cheia!', '#f43f5e');
+        }
+    }
+
+    function closeShop() {
+        shopOpen = false;
+        document.getElementById('shop-ui').style.display = 'none';
+        p.stage++;
+        bumpMaxStage();
+        save();
+        spawn();
+    }
+
+    function enemyTurn() {
+        if(!e.alive || !p.alive || shopOpen || gamePaused) return;
+        turnTimer = setTimeout(() => {
+            if(!e.alive || !p.alive || shopOpen || gamePaused) return;
+            triggerAnim('p-box', 'anim-shake');
+            let d;
+            if (isDef) {
+                d = Math.max(1, Math.floor(e.dmg * 0.12 - (p.def * 0.08)));
+            } else {
+                d = Math.max(2, Math.floor(e.dmg - (p.def * 0.55)));
+            }
+            p.hp -= d;
+            p.killStreak = 0;
+            addLog(`Dano recebido: ${d}${isDef ? ' (bloqueio)' : ''}`, '#f43f5e');
+            if(p.hp <= 0) { p.alive = false; showGameOver(); return; }
+            updateUI(); enemyTurn();
+        }, 2800);
+    }
+
+    function doAction(type) {
+        const cost = p.atkStamCost != null ? p.atkStamCost : 12;
+        if(!e.alive || !p.alive || shopOpen || gamePaused || (type === 'attack' && p.stam < cost)) return;
+        if(type === 'attack') {
+            p.stam -= cost; p.fury = Math.min(100, p.fury + 15);
+            triggerAnim('p-box', 'anim-atk'); triggerAnim('e-box', 'anim-shake');
+            damageEnemy(p.atk);
+        } else if(type === 'special' && p.fury >= 100) {
+            p.fury = 0; triggerAnim('p-box', 'anim-atk');
+            addLog("ULTI ATIVADA!", '#8b5cf6'); damageEnemy(Math.floor(p.atk * 3.4));
+        }
+    }
+
+    function damageEnemy(val) {
+        const variance = 1 + Math.floor(Math.random() * (4 + Math.min(6, p.stage / 3)));
+        let d = Math.floor(val + Math.random() * variance);
+        e.hp -= d;
+        addLog(`Você causou ${d} de dano!`, '#10b981');
+        if(e.hp <= 0) { 
+            e.alive = false; clearTimeout(turnTimer); 
+            p.stage++;
+            p.killStreak = (p.killStreak || 0) + 1;
+            p.totalKillsLifetime = (p.totalKillsLifetime || 0) + 1;
+            const D = getWorldDifficultyMult(p.world || 1);
+            const baseGold = Math.floor((38 + Math.floor(p.stage * 1.4) + (p.world - 1) * 10) * D.gold);
+            const streakBonus = Math.min(40, (p.killStreak - 1) * 5);
+            const goldGain = baseGold + streakBonus;
+            p.gold += goldGain;
+            rollLootOnKill();
+            if (typeof DMDB !== 'undefined') {
+                if (p.world === 1) DMDB.incrementKill(1);
+                if (p.world === 2) DMDB.incrementKill(2);
+            }
+            checkWorldAdvanceAfterKill();
+            bumpMaxStage();
+            addLog(`Vitória! ${formatVictoryGold(goldGain, streakBonus)}`, '#f59e0b');
+            save();
+            if (gamePaused) { updateUI(); return; }
+            setTimeout(spawn, 1150);
+        }
+        updateUI();
+    }
+
+    function checkWorldAdvanceAfterKill() {
+        if (typeof DMDB === 'undefined') return;
+        const g = DMDB.getGlobal();
+        if (p.world === 1 && g.killsW1 === WORLD2_UNLOCK_KILLS) showWorldAdvanceModal(2);
+        else if (p.world === 2 && g.killsW2 === WORLD3_UNLOCK_KILLS) showWorldAdvanceModal(3);
+    }
+
+    function showWorldAdvanceModal(targetWorld) {
+        pendingAdvanceTarget = targetWorld;
+        gamePaused = true;
+        clearTimeout(turnTimer);
+        const titles = { 2: 'Reino Mágico', 3: 'Mundo Vazio' };
+        document.getElementById('world-advance-title').textContent = titles[targetWorld] + ' desbloqueado!';
+        document.getElementById('world-advance-text').innerHTML =
+            'Avançar agora: <b>loot e ouro melhores</b>, inimigos <b>mais fortes</b> e progressão <b>mais lenta</b> (mais resistência por sala).<br><br>' +
+            'Ou fique neste mundo sem limite de salas (infinito) e use o botão <b>PRÓXIMO MUNDO</b> no canto quando quiser.';
+        document.getElementById('world-advance-overlay').style.display = 'flex';
+        syncAdvanceButton();
+    }
+
+    function openWorldAdvanceFromButton() {
+        if (typeof DMDB === 'undefined') return;
+        const g = DMDB.getGlobal();
+        if (p.world === 1 && g.killsW1 >= WORLD2_UNLOCK_KILLS) showWorldAdvanceModal(2);
+        else if (p.world === 2 && g.killsW2 >= WORLD3_UNLOCK_KILLS) showWorldAdvanceModal(3);
+    }
+
+    function dismissWorldAdvance() {
+        document.getElementById('world-advance-overlay').style.display = 'none';
+        gamePaused = false;
+        pendingAdvanceTarget = null;
+        syncAdvanceButton();
+        spawn();
+    }
+
+    function confirmWorldAdvance() {
+        const next = pendingAdvanceTarget;
+        document.getElementById('world-advance-overlay').style.display = 'none';
+        gamePaused = false;
+        pendingAdvanceTarget = null;
+        if (!next || next !== p.world + 1) { syncAdvanceButton(); return; }
+        p.world = next;
+        p.stage = 1;
+        p.killStreak = 0;
+        save();
+        applyWorldTheme();
+        applyPlayerSprite();
+        clearTimeout(turnTimer);
+        spawn();
+        syncAdvanceButton();
+    }
+
+    function syncAdvanceButton() {
+        const btn = document.getElementById('btn-advance-world');
+        if (!btn || typeof DMDB === 'undefined') return;
+        const g = DMDB.getGlobal();
+        let show = false;
+        if (p.world === 1 && g.killsW1 >= WORLD2_UNLOCK_KILLS) show = true;
+        if (p.world === 2 && g.killsW2 >= WORLD3_UNLOCK_KILLS) show = true;
+        btn.style.display = show ? 'inline-block' : 'none';
+    }
+
+    function togglePause() {
+        gamePaused = !gamePaused;
+        const ov = document.getElementById('pause-overlay');
+        ov.style.display = gamePaused ? 'flex' : 'none';
+        if (gamePaused) clearTimeout(turnTimer);
+        else if (e.alive && p.alive && !shopOpen) enemyTurn();
+    }
+
+    function saveAndReturnMenu() {
+        save();
+        gamePaused = false;
+        document.getElementById('pause-overlay').style.display = 'none';
+        document.getElementById('gameover-overlay').style.display = 'none';
+        document.getElementById('world-advance-overlay').style.display = 'none';
+        clearTimeout(turnTimer);
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('shop-ui').style.display = 'none';
+        shopOpen = false;
+        setHudVisible(false);
+        showMainMenu();
+    }
+
+    function showGameOver() {
+        gamePaused = true;
+        clearTimeout(turnTimer);
+        document.getElementById('gameover-overlay').style.display = 'flex';
+    }
+
+    function gameOverRetry() {
+        document.getElementById('gameover-overlay').style.display = 'none';
+        gamePaused = false;
+        p.alive = true;
+        recalcStats();
+        p.hp = p.mHp;
+        p.stam = p.stamMax != null ? p.stamMax : 100;
+        p.fury = 0;
+        clearTimeout(turnTimer);
+        spawn();
+    }
+
+    function gameOverToMenu() {
+        document.getElementById('gameover-overlay').style.display = 'none';
+        gamePaused = false;
+        p.alive = false;
+        document.getElementById('game-ui').style.display = 'none';
+        setHudVisible(false);
+        showMainMenu();
+    }
+
+    function formatVictoryGold(total, streakExtra) {
+        if (streakExtra > 0) return `+${total} ouro (inclui +${streakExtra} de streak)`;
+        return `+${total} ouro`;
+    }
+
+    function equipBonusesFromState() {
+        let atk = 0, def = 0, mhp = 0;
+        ['weapon', 'armor', 'accessory'].forEach(slot => {
+            const idx = p.equipped[slot];
+            if (idx == null) return;
+            const cell = p.inv[idx];
+            if (!cell || !cell.id) return;
+            const it = getItemById(cell.id);
+            const sk = equipSlotKeyForItem(it);
+            if (!it || sk !== slot) return;
+            atk += it.bonusAtk || 0;
+            def += it.bonusDef || 0;
+            mhp += it.bonusMHp || 0;
+        });
+        return { atk, def, mhp };
+    }
+
+    function renderEquipPanel() {
+        const slotsEl = document.getElementById('equip-slots');
+        const totEl = document.getElementById('equip-totals');
+        if (!slotsEl || !totEl) return;
+        const labels = { weapon: 'Arma', armor: 'Armadura / escudo', accessory: 'Acessório' };
+        let html = '';
+        ['weapon', 'armor', 'accessory'].forEach(key => {
+            const idx = p.equipped[key];
+            let line = '—';
+            if (idx != null && p.inv[idx]) {
+                const it = getItemById(p.inv[idx].id);
+                if (it) {
+                    const bits = [];
+                    if (it.bonusAtk) bits.push(`+${it.bonusAtk} ATK`);
+                    if (it.bonusDef) bits.push(`+${it.bonusDef} DEF`);
+                    if (it.bonusMHp) bits.push(`+${it.bonusMHp} HP máx.`);
+                    line = `${it.icon} ${it.name}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`;
+                }
+            }
+            html += `<div class="equip-line"><span>${labels[key]}</span><b>${line}</b></div>`;
+        });
+        slotsEl.innerHTML = html;
+        const b = equipBonusesFromState();
+        const parts = [];
+        if (b.atk) parts.push(`+${b.atk} ATK`);
+        if (b.def) parts.push(`+${b.def} DEF`);
+        if (b.mhp) parts.push(`+${b.mhp} HP máx.`);
+        totEl.innerHTML = parts.length
+            ? `Bônus do equipamento: ${parts.join(' · ')}`
+            : 'Bônus do equipamento: nenhum (equipe armas / escudos / amuletos no inventário).';
+    }
+
+    function invClick(index) {
+        if (!p.inv[index]) return;
+        const cell = p.inv[index];
+        const it = getItemById(cell.id);
+        if (!it) return;
+
+        if (it.slot === 'consumable') {
+            const heal = it.heal || 0;
+            if (heal) p.hp = Math.min(p.mHp, p.hp + heal);
+            p.inv.splice(index, 1);
+            fixEquippedIndicesAfterRemove(index);
+            addLog(`Usou ${it.name}! (+${heal} HP)`, '#10b981');
+            recalcStats();
+            save();
+            updateUI();
+            return;
+        }
+
+        const slot = equipSlotKeyForItem(it);
+        if (!slot) return;
+
+        if (p.equipped[slot] === index) {
+            p.equipped[slot] = null;
+            addLog(`Desequipou ${it.name}.`, '#94a3b8');
+        } else {
+            p.equipped[slot] = index;
+            addLog(`Equipou ${it.name}.`, '#10b981');
+        }
+        recalcStats();
+        save();
+        updateUI();
+    }
+
+    function updateUI() {
+        recalcStats();
+        const eb = equipBonusesFromState();
+        document.getElementById('hp-bar').style.width = (p.hp/p.mHp*100) + "%";
+        document.getElementById('hp-text').innerText = `${p.hp}/${p.mHp}`;
+        const em = e.mHp > 0 ? e.mHp : 1;
+        document.getElementById('e-hp-bar').style.width = (Math.max(0, e.hp) / em * 100) + "%";
+        document.getElementById('e-hp-text').innerText = `${Math.max(0, e.hp)}/${e.mHp || 0}`;
+        const smx = p.stamMax != null ? p.stamMax : 100;
+        document.getElementById('stam-bar').style.width = (p.stam / smx * 100) + "%";
+        document.getElementById('stam-text').innerText = `${Math.floor(p.stam)}/${smx}`;
+        document.getElementById('fury-bar').style.width = p.fury + "%";
+        document.getElementById('fury-text').innerText = `${p.fury}%`;
+        const cn = document.getElementById('ui-class-name');
+        if (cn) cn.textContent = 'Classe: ' + getClassById(p.classId).name;
+        
+        const s = document.getElementById('btn-spec');
+        if(p.fury >= 100) { s.classList.add('ready'); s.style.opacity = '1'; s.style.cursor = 'pointer'; }
+        else { s.classList.remove('ready'); s.style.opacity = '0.4'; s.style.cursor = 'not-allowed'; }
+
+        document.getElementById('ui-gold').innerText = p.gold;
+        document.getElementById('ui-stage').innerText = p.stage;
+        const ust = document.getElementById('ui-streak');
+        if (ust) ust.textContent = p.killStreak != null ? p.killStreak : 0;
+        const ulk = document.getElementById('ui-luck');
+        if (ulk) ulk.textContent = getLootLuckPercent() + '%';
+        const blk = document.getElementById('btn-block');
+        if (blk) blk.classList.toggle('is-blocking', !!isDef);
+        document.getElementById('ui-atk').innerText = p.atk + (eb.atk ? ` (${p.baseAtk}+${eb.atk})` : '');
+        document.getElementById('ui-def').innerText = p.def + (eb.def ? ` (${p.baseDef}+${eb.def})` : '');
+
+        const inv = document.getElementById('inv-grid');
+        inv.innerHTML = '';
+        for (let i = 0; i < 12; i++) {
+            const cell = p.inv[i];
+            const slot = document.createElement('div');
+            slot.className = 'inv-slot' + (!cell ? ' inv-empty' : '') + (cell && isInvIndexEquipped(i) ? ' inv-equipped' : '');
+            if (cell) {
+                const it = getItemById(cell.id);
+                slot.textContent = it ? it.icon : '?';
+                slot.title = it ? `${it.name} — clique para equipar/usar` : '';
+                slot.onclick = () => invClick(i);
+            }
+            inv.appendChild(slot);
+        }
+        renderEquipPanel();
+        updateWorldProgressLine();
+        syncAdvanceButton();
+    }
+
+    function setHudVisible(visible) {
+        const h = document.getElementById('hud-top');
+        if (h) h.style.display = visible ? 'flex' : 'none';
+    }
+
+    function addLog(m, c) {
+        const l = document.getElementById('log');
+        const d = document.createElement('div');
+        d.style.color = c || '#cbd5e1'; 
+        d.style.marginBottom = '5px';
+        d.innerText = `> ${m}`;
+        l.appendChild(d); 
+        l.scrollTop = l.scrollHeight;
+    }
+
+    function triggerAnim(id, cls) {
+        let el = document.getElementById(id);
+        el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    }
+    function save() {
+        bumpMaxStage();
+        localStorage.setItem(SAVE_KEY, JSON.stringify(p));
+        updateMenuWorldButtons();
+    }
+
+</script>
+</body>
+</html>

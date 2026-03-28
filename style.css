@@ -1,0 +1,191 @@
+:root {
+    --bg-dark: #0f172a;
+    --panel-bg: #1e293b;
+    --accent-red: #e11d48;
+    --accent-gold: #fbbf24;
+    --text-main: #f8fafc;
+}
+
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+    color: var(--text-main);
+    height: 100vh;
+    overflow: hidden;
+}
+
+h1, h2, h3 {
+    font-family: 'Cinzel', serif; /* Fonte mais "RPG" para títulos */
+    margin: 0 0 15px 0;
+}
+
+.screen-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.menu-box {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 40px;
+    border-radius: 12px;
+    border: 2px solid var(--accent-gold);
+    text-align: center;
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.2);
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-around;
+    padding: 15px;
+    background: rgba(2, 6, 23, 0.9);
+    border-bottom: 2px solid var(--panel-bg);
+    font-weight: 600;
+}
+
+.container {
+    display: flex;
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+    gap: 20px;
+}
+
+.center-box {
+    flex: 2;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    border: 1px solid #334155;
+    position: relative;
+}
+
+.side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.card {
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid #475569;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+/* --- BOTÕES --- */
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-family: 'Poppins', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.2);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+.btn-primary { background: var(--accent-gold); color: #000; font-size: 1.1rem; }
+.btn-attack { background: #b91c1c; color: white; font-size: 1.2rem; }
+.btn-parry { background: #2563eb; color: white; font-size: 1.2rem; }
+.btn-shop { background: #334155; color: white; border: 1px solid #64748b; }
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* --- ÁREA DO INIMIGO E ANIMAÇÕES --- */
+#enemyContainer {
+    position: relative;
+    height: 150px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+}
+
+#enemyIcon {
+    font-size: 80px;
+    transition: transform 0.1s;
+}
+
+.hp-bar {
+    width: 80%;
+    height: 25px;
+    background: #334155;
+    margin: 15px auto;
+    border-radius: 15px;
+    overflow: hidden;
+    border: 2px solid #0f172a;
+}
+
+#enemyHP {
+    height: 100%;
+    background: linear-gradient(90deg, #9f1239, #e11d48);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#log {
+    height: 180px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: #cbd5e1;
+    text-align: left;
+}
+
+/* -------------------------------------
+   AULA DE ANIMAÇÕES (@keyframes)
+-------------------------------------- */
+
+/* 1. Dano no Inimigo (Um "tremor" rápido) */
+@keyframes shake {
+    0% { transform: translateX(0); filter: brightness(2) drop-shadow(0 0 10px white); }
+    25% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+    75% { transform: translateX(-10px); }
+    100% { transform: translateX(0); filter: none; }
+}
+.anim-shake { animation: shake 0.3s; }
+
+/* 2. O Telegraph do Parry (Avisa que vai bater) */
+@keyframes telegraph {
+    0% { transform: scale(1); filter: none; }
+    50% { transform: scale(1.2); filter: drop-shadow(0 0 20px red) sepia(1) hue-rotate(-50deg) saturate(5); }
+    100% { transform: scale(1.1); filter: drop-shadow(0 0 10px red); }
+}
+.anim-telegraph { animation: telegraph 1s forwards; } /* "forwards" mantém o estado final da animação */
+
+/* 3. O Ataque final do Inimigo (Pulo na tela) */
+@keyframes strike {
+    0% { transform: scale(1.1) translateY(0); }
+    50% { transform: scale(1.5) translateY(20px); }
+    100% { transform: scale(1) translateY(0); }
+}
+.anim-strike { animation: strike 0.2s; }
+
+/* 4. Tremor da tela quando você toma dano */
+@keyframes screenShake {
+    0% { transform: translate(0, 0); }
+    20% { transform: translate(-5px, 5px) rotate(-1deg); }
+    40% { transform: translate(5px, -5px) rotate(1deg); }
+    60% { transform: translate(-5px, -5px); }
+    100% { transform: translate(0, 0); }
+}
+.anim-screen-shake { animation: screenShake 0.4s; }
