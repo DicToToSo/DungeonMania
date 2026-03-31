@@ -52,7 +52,6 @@
         .entity-box { position: absolute; bottom: 15px; z-index: 10; display: flex; justify-content: center; align-items: flex-end; }
 
         #player-sprite { width: 220px; height: 220px; background-image: url('heroi-azul-parado.png'); background-size: contain; background-repeat: no-repeat; background-position: center bottom; image-rendering: pixelated; }
-        /* Coloque o arquivo primeiro-inimigo.png na mesma pasta que index.html */
         #enemy-sprite { width: 220px; height: 220px; background-image: url('primeiro-inimigo.png'); background-size: contain; background-repeat: no-repeat; background-position: center bottom; image-rendering: pixelated; }
 
         .bar-container { position: relative; margin: 10px 0; }
@@ -108,6 +107,11 @@
         .card-pick:hover { transform: translateY(-4px); border-color: var(--gold); box-shadow: 0 12px 22px rgba(0,0,0,0.4); }
         .card-pick-title { font-family: 'Cinzel', serif; color: #f8fafc; font-size: 0.95rem; margin-bottom: 8px; }
         .card-pick-desc { color: #cbd5e1; font-size: 0.78rem; line-height: 1.4; }
+        
+        /* Sistema de Pets */
+        .pet-option:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .pet-info { position: fixed; top: 10px; left: 10px; background: var(--panel); padding: 10px; border-radius: 8px; font-size: 0.75rem; z-index: 4000; }
+        .pet-info b { color: var(--gold); }
     </style>
 </head>
 <body>
@@ -133,7 +137,7 @@
     <h1 style="font-family:'Cinzel'; font-size: 3rem; color:var(--gold);">DUNGEON MANIA</h1>
     <button class="btn-menu" onclick="startGame('new')">NOVO JOGO</button>
     <button class="btn-menu" id="btn-cont" onclick="startGame('continue')" style="display:none;">CONTINUAR</button>
-    <button class="btn-menu" id="btn-worlds" onclick="openWorldSelect()" style="border-color: var(--purple);">MUNDOS</button>
+    <button class="btn-menu" id="btn-worlds" onclick="openWorldSelect()" style="border-color: var(--purple;">MUNDOS</button>
     <button class="btn-menu" id="btn-config" onclick="openConfig()" style="display:none; border-color: var(--gold);">CONFIG</button>
     <button class="btn-menu" onclick="doLogout()" style="border-color:#64748b;">SAIR</button>
     <p id="menu-world-hint" class="hint-unlock">Mundo 2: <b id="hint-w2">20</b> abates na Floresta · Mundo 3: <b id="hint-w3">25</b> abates no Reino Mágico.</p>
@@ -152,7 +156,7 @@
     <p>Escolha com sabedoria, forasteiro...</p>
     <div id="shop-items" class="shop-grid"></div>
     <p>Seu Ouro: <b id="shop-gold-val" style="color:var(--gold)">0</b></p>
-    <button class="btn-menu" onclick="closeShop()" style="width: 300px; border-color: var(--green);">CONTINUAR JORNADA</button>
+    <button class="btn-menu" onclick="closeShop()" style="width: 300px; border-color: var(--green;">CONTINUAR JORNADA</button>
 </div>
 
 <div id="hud-top">
@@ -208,7 +212,6 @@
                 <img class="platform" src="plataforma-azul.png">
             </div>
             <div class="unit-wrapper">
-                <!-- Salve primeiro-inimigo.png na mesma pasta que index.html -->
                 <div id="e-box" class="entity-box"><div id="enemy-sprite"></div></div>
                 <img class="platform" src="plataforma-vermelha.png">
             </div>
@@ -252,11 +255,14 @@
 </div>
 
 <script src="js/db.js"></script>
+<script src="js/Player.js"></script>
+<script src="js/Enemy.js"></script>
+<script src="js/PetSystem.js"></script>
+<script src="js/UI.js"></script>
 <script>
+    // CORREÇÃO: Restaurar todas as variáveis e funções originais
     const SAVE_KEY = 'dm_v16_save';
     const SAVE_LEGACY = 'dm_v31';
-
-    /** Desbloqueio por abates (persistente em DMDB.global). */
     const WORLD2_UNLOCK_KILLS = 20;
     const WORLD3_UNLOCK_KILLS = 25;
 
@@ -266,11 +272,6 @@
         { id: 3, slug: 'mundo_vazio', name: 'Mundo Vazio', emoji: '⬛', bgClass: 'bg-world-3', enemyPrefix: 'Vazio' }
     ];
 
-    /**
-     * Balance v16: Herói = referência. Arqueiro = dano/stamina altos, frágil.
-     * Cavaleiro = médio sólido. Tank = sobrevivência, golpes mais pesados (custo maior).
-     * blockStamRegen = stamina/seg ao segurar bloqueio · furyBlockPerSec = fúria/seg bloqueando
-     */
     const classesDb = [
         { id: 'heroi', name: 'Herói', sprite: 'heroi-azul-parado.png', baseAtk: 22, baseDef: 11, baseMHp: 110, stamMax: 100, stamRegen: 9, blockStamRegen: 10, atkCost: 12, furyBlockPerSec: 2.5, dodgeChance: 0, standChance: 0, critChance: 0 },
         { id: 'arqueiro', name: 'Arqueiro', sprite: 'arqueiro.png', baseAtk: 30, baseDef: 5, baseMHp: 82, stamMax: 100, stamRegen: 12, blockStamRegen: 9, atkCost: 10, furyBlockPerSec: 2, dodgeChance: 0.22, standChance: 0, critChance: 0 },
@@ -278,14 +279,11 @@
         { id: 'tank', name: 'Tank', sprite: 'tank.png', baseAtk: 18, baseDef: 19, baseMHp: 158, stamMax: 100, stamRegen: 6, blockStamRegen: 14, atkCost: 14, furyBlockPerSec: 4, dodgeChance: 0, standChance: 0.24, critChance: 0 }
     ];
 
-    function getClassById(id) { return classesDb.find(c => c.id === id) || classesDb[0]; }
-
     const petsDb = [
         { id: 'fox', emoji: '🦊', name: 'Raposa Garimpeira', type: 'loot' },
         { id: 'slime', emoji: '🟢', name: 'Slime Venenoso', type: 'dot' },
         { id: 'wolf', emoji: '🐺', name: 'Lobo de Caça', type: 'damage' }
     ];
-    function getPetById(id) { return petsDb.find(pet => pet.id === id); }
 
     const buffCardsDb = [
         { id: 'atk_minor', title: 'Fúria de Aço', desc: '+2 ATK permanente.', apply: (pl) => { pl.buffAtk = (pl.buffAtk || 0) + 2; } },
@@ -297,9 +295,59 @@
         { id: 'unlock_pet_wolf', title: 'Pacto do Lobo', desc: 'Desbloqueia o pet 🐺 (dano passivo).', apply: (pl) => unlockPet(pl, 'wolf') }
     ];
 
-    function getSaveRaw() {
-        return localStorage.getItem(SAVE_KEY) || localStorage.getItem(SAVE_LEGACY);
-    }
+    const itemsDb = [
+        { id: 'espada_inicial', name: 'Espada Inicial', icon: '⚔️', price: 0, rarity: 1, slot: 'weapon', bonusAtk: 0, bonusDef: 0, bonusMHp: 0 },
+        { id: 'pocao', name: 'Poção Vida', icon: '🧪', price: 28, rarity: 0.6, slot: 'consumable', heal: 42 },
+        { id: 'amuleto', name: 'Amuleto', icon: '📿', price: 48, rarity: 0.6, slot: 'accessory', bonusAtk: 0, bonusDef: 4, bonusMHp: 0 },
+        { id: 'espada_aco', name: 'Espada Aço', icon: '🗡️', price: 115, rarity: 0.3, slot: 'weapon', bonusAtk: 8, bonusDef: 0, bonusMHp: 0 },
+        { id: 'escudo_rei', name: 'Escudo Rei', icon: '🛡️', price: 145, rarity: 0.3, slot: 'armor', bonusAtk: 0, bonusDef: 5, bonusMHp: 0 },
+        { id: 'excalibur', name: 'Excalibur', icon: '✨', price: 380, rarity: 0.1, slot: 'weapon', bonusAtk: 13, bonusDef: 0, bonusMHp: 0 },
+        { id: 'buy_class_arqueiro', name: 'Treino: Arqueiro', icon: '🏹', price: 300, rarity: 0.4, slot: 'class', classId: 'arqueiro' },
+        { id: 'buy_class_cavaleiro', name: 'Treino: Cavaleiro', icon: '⚜️', price: 275, rarity: 0.42, slot: 'class', classId: 'cavaleiro' },
+        { id: 'buy_class_tank', name: 'Treino: Tank', icon: '🧱', price: 320, rarity: 0.38, slot: 'class', classId: 'tank' }
+    ];
+
+    const iconToId = { '🧪': 'pocao', '📿': 'amuleto', '🗡️': 'espada_aco', '🛡️': 'escudo_rei', '✨': 'excalibur', '⚔️': 'espada_inicial' };
+
+    const WORLD_DIFF_MULT = {
+        1: { hp: 1, dmg: 1, gold: 1, loot: 1, slow: 1 },
+        2: { hp: 1.3, dmg: 1.12, gold: 1.22, loot: 1.18, slow: 1.12 },
+        3: { hp: 1.58, dmg: 1.22, gold: 1.42, loot: 1.35, slow: 1.2 }
+    };
+
+    // Estado do jogo
+    let p = {
+        hp: 110, mHp: 110, baseAtk: 22, baseDef: 11, baseMHp: 110,
+        atk: 22, def: 11, gold: 55, stage: 1, stam: 100, fury: 0,
+        stamMax: 100, stamRegen: 9, blockStamRegen: 10, atkStamCost: 12, furyBlockPerSec: 2.5,
+        killStreak: 0, totalKillsLifetime: 0,
+        buffAtk: 0, buffDef: 0, buffMHp: 0, buffStamMax: 0, buffStamRegen: 0, buffLootLuck: 0,
+        cardHistory: [], lastCardStageOffered: 0,
+        petOwned: ['fox'], activePetId: 'fox',
+        // Novos atributos do sistema de pets
+        petsColecao: [], petAtual: null,
+        staminaRegenBonus: 0, dropChanceBonus: 0, rareDropBonus: 0, passiveDamage: 0,
+        petWorldOffered: false, // Controle se pet já foi oferecido neste mundo
+        enemyDotTurns: 0, enemyDotDmg: 0,
+        classId: 'heroi', ownedClasses: ['heroi'],
+        inv: [{ id: 'espada_inicial' }],
+        equipped: { weapon: 0, armor: null, accessory: null },
+        alive: true, world: 1, maxStageReached: 1
+    };
+    
+    let e = { hp: 0, mHp: 0, dmg: 0, alive: false };
+    let isDef = false, turnTimer, shopOpen = false;
+    let gamePaused = false;
+    let pendingAdvanceTarget = null;
+    let stamRegenStarted = false;
+    let currentCardOptions = [];
+
+    // Funções originais restauradas
+    function getClassById(id) { return classesDb.find(c => c.id === id) || classesDb[0]; }
+    function getPetById(id) { return petsDb.find(pet => pet.id === id); }
+    function getItemById(id) { return itemsDb.find(x => x.id === id); }
+    function getWorldMeta(id) { return WORLDS.find(w => w.id === id) || WORLDS[0]; }
+    function getWorldDifficultyMult(world) { return WORLD_DIFF_MULT[world] || WORLD_DIFF_MULT[1]; }
 
     function defaultPlayer(worldId) {
         return {
@@ -310,6 +358,10 @@
             buffAtk: 0, buffDef: 0, buffMHp: 0, buffStamMax: 0, buffStamRegen: 0, buffLootLuck: 0,
             cardHistory: [], lastCardStageOffered: 0,
             petOwned: ['fox'], activePetId: 'fox',
+            // Novos atributos do sistema de pets
+            petsColecao: [], petAtual: null,
+            staminaRegenBonus: 0, dropChanceBonus: 0, rareDropBonus: 0, passiveDamage: 0,
+            petWorldOffered: false, // Controle se pet já foi oferecido neste mundo
             enemyDotTurns: 0, enemyDotDmg: 0,
             classId: 'heroi', ownedClasses: ['heroi'],
             inv: [{ id: 'espada_inicial' }],
@@ -345,152 +397,6 @@
         return getPetById(p.activePetId);
     }
 
-    function drawCardOptions() {
-        const pool = buffCardsDb.slice();
-        const result = [];
-        while (pool.length && result.length < 3) {
-            const i = Math.floor(Math.random() * pool.length);
-            result.push(pool.splice(i, 1)[0]);
-        }
-        return result;
-    }
-
-    let currentCardOptions = [];
-    function openCardChoice() {
-        currentCardOptions = drawCardOptions();
-        const list = document.getElementById('card-choice-list');
-        list.innerHTML = '';
-        currentCardOptions.forEach(card => {
-            const el = document.createElement('div');
-            el.className = 'card-pick';
-            el.innerHTML = `<div class="card-pick-title">${card.title}</div><div class="card-pick-desc">${card.desc}</div>`;
-            el.onclick = () => chooseCard(card.id);
-            list.appendChild(el);
-        });
-        gamePaused = true;
-        document.getElementById('card-choice-overlay').style.display = 'flex';
-    }
-
-    function chooseCard(cardId) {
-        const card = buffCardsDb.find(c => c.id === cardId);
-        if (!card) return;
-        card.apply(p);
-        p.cardHistory = p.cardHistory || [];
-        p.cardHistory.push(cardId);
-        p.lastCardStageOffered = p.stage;
-        document.getElementById('card-choice-overlay').style.display = 'none';
-        gamePaused = false;
-        applyClassBase();
-        recalcStats();
-        const pet = getActivePet();
-        addLog(`Carta escolhida: ${card.title}${pet ? ` · Pet ativo: ${pet.emoji}` : ''}`, '#a78bfa');
-        save();
-        spawn();
-    }
-
-    function shouldOfferCard() {
-        return p.stage > 1 && p.stage % 5 === 0 && (p.lastCardStageOffered || 0) !== p.stage;
-    }
-
-    function getLootLuckPercent() {
-        const k = p.totalKillsLifetime || 0;
-        const w = (p.world || 1) - 1;
-        const b = p.buffLootLuck || 0;
-        return Math.min(20, Math.round((k * 0.015 + w * 1.1 + b) * 10) / 10);
-    }
-
-    function rollLootOnKill() {
-        const D = getWorldDifficultyMult(p.world || 1);
-        const luckRoll = Math.min(0.13, getLootLuckPercent() / 80) * D.loot;
-        if (Math.random() > 0.27 + luckRoll) return;
-        if (Math.random() < 0.58) {
-            const g = Math.floor((10 + Math.random() * (14 + p.stage * 2 + p.world * 4)) * D.gold);
-            p.gold += g;
-            addLog(`Loot: +${g} ouro`, '#fbbf24');
-            return;
-        }
-        const poolAll = itemsDb.filter(it => it.slot !== 'class' && it.id !== 'espada_inicial' && it.price > 0);
-        const roll = Math.random();
-        let pool;
-        if (roll > 0.92) pool = poolAll.filter(it => it.price >= 250);
-        else if (roll > 0.72) pool = poolAll.filter(it => it.price >= 90 && it.price < 250);
-        else if (roll > 0.38) pool = poolAll.filter(it => it.price >= 35 && it.price < 150);
-        else pool = poolAll.filter(it => it.price <= 55);
-        if (!pool.length) pool = poolAll.filter(it => it.slot === 'consumable');
-        if (!pool.length) pool = poolAll.slice();
-        if (!pool.length) return;
-        const item = pool[Math.floor(Math.random() * pool.length)];
-        if (p.inv.length >= 12) {
-            addLog('Loot: inventário cheio — item perdido!', '#64748b');
-            return;
-        }
-        p.inv.push({ id: item.id });
-        addLog(`Loot: ${item.icon} ${item.name}!`, '#c4b5fd');
-    }
-
-    function applyPlayerSprite() {
-        const c = getClassById(p.classId);
-        const el = document.getElementById('player-sprite');
-        if (el) el.style.backgroundImage = `url('${c.sprite}')`;
-    }
-
-    let p = defaultPlayer(1);
-    let e = { hp: 0, mHp: 0, dmg: 0, alive: false };
-    let isDef = false, turnTimer, shopOpen = false;
-    let gamePaused = false;
-    let pendingAdvanceTarget = null;
-
-    /** Próximos mundos: mais HP/dano inimigo, ouro/loot melhores, curva mais lenta (slow). */
-    const WORLD_DIFF_MULT = {
-        1: { hp: 1, dmg: 1, gold: 1, loot: 1, slow: 1 },
-        2: { hp: 1.3, dmg: 1.12, gold: 1.22, loot: 1.18, slow: 1.12 },
-        3: { hp: 1.58, dmg: 1.22, gold: 1.42, loot: 1.35, slow: 1.2 }
-    };
-
-    function getWorldDifficultyMult(world) {
-        return WORLD_DIFF_MULT[world] || WORLD_DIFF_MULT[1];
-    }
-
-    const itemsDb = [
-        { id: 'espada_inicial', name: 'Espada Inicial', icon: '⚔️', price: 0, rarity: 1, slot: 'weapon', bonusAtk: 0, bonusDef: 0, bonusMHp: 0 },
-        { id: 'pocao', name: 'Poção Vida', icon: '🧪', price: 28, rarity: 0.6, slot: 'consumable', heal: 42 },
-        { id: 'amuleto', name: 'Amuleto', icon: '📿', price: 48, rarity: 0.6, slot: 'accessory', bonusAtk: 0, bonusDef: 4, bonusMHp: 0 },
-        { id: 'espada_aco', name: 'Espada Aço', icon: '🗡️', price: 115, rarity: 0.3, slot: 'weapon', bonusAtk: 8, bonusDef: 0, bonusMHp: 0 },
-        { id: 'escudo_rei', name: 'Escudo Rei', icon: '🛡️', price: 145, rarity: 0.3, slot: 'armor', bonusAtk: 0, bonusDef: 5, bonusMHp: 0 },
-        { id: 'excalibur', name: 'Excalibur', icon: '✨', price: 380, rarity: 0.1, slot: 'weapon', bonusAtk: 13, bonusDef: 0, bonusMHp: 0 },
-        { id: 'buy_class_arqueiro', name: 'Treino: Arqueiro', icon: '🏹', price: 300, rarity: 0.4, slot: 'class', classId: 'arqueiro' },
-        { id: 'buy_class_cavaleiro', name: 'Treino: Cavaleiro', icon: '⚜️', price: 275, rarity: 0.42, slot: 'class', classId: 'cavaleiro' },
-        { id: 'buy_class_tank', name: 'Treino: Tank', icon: '🧱', price: 320, rarity: 0.38, slot: 'class', classId: 'tank' }
-    ];
-
-    const iconToId = { '🧪': 'pocao', '📿': 'amuleto', '🗡️': 'espada_aco', '🛡️': 'escudo_rei', '✨': 'excalibur', '⚔️': 'espada_inicial' };
-
-    function getItemById(id) { return itemsDb.find(x => x.id === id); }
-
-    function equipSlotKeyForItem(it) {
-        if (!it) return null;
-        if (it.slot === 'class') return null;
-        if (it.slot === 'weapon') return 'weapon';
-        if (it.slot === 'armor') return 'armor';
-        if (it.slot === 'accessory') return 'accessory';
-        return null;
-    }
-
-    function fixEquippedIndicesAfterRemove(removedIndex) {
-        if (!p.equipped) return;
-        ['weapon', 'armor', 'accessory'].forEach(s => {
-            const v = p.equipped[s];
-            if (v == null) return;
-            if (v === removedIndex) p.equipped[s] = null;
-            else if (v > removedIndex) p.equipped[s] = v - 1;
-        });
-    }
-
-    function isInvIndexEquipped(idx) {
-        if (!p.equipped) return false;
-        return p.equipped.weapon === idx || p.equipped.armor === idx || p.equipped.accessory === idx;
-    }
-
     function recalcStats(player) {
         const pl = player || p;
         if (pl.baseAtk == null) pl.baseAtk = 25;
@@ -506,8 +412,7 @@
             const cell = pl.inv[idx];
             if (!cell || !cell.id) return;
             const it = getItemById(cell.id);
-            const sk = equipSlotKeyForItem(it);
-            if (!it || sk !== slot) return;
+            if (!it || it.slot !== slot) return;
             atk += it.bonusAtk || 0;
             def += it.bonusDef || 0;
             mhp += it.bonusMHp || 0;
@@ -524,65 +429,11 @@
         }
     }
 
-    function migratePlayer(raw) {
-        const o = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        if (o.world == null) o.world = 1;
-        if (o.maxStageReached == null) o.maxStageReached = Math.max(1, o.stage || 1);
-        if (!o.classId) o.classId = 'heroi';
-        if (!o.ownedClasses || !o.ownedClasses.length) o.ownedClasses = ['heroi'];
-        if (o.killStreak == null) o.killStreak = 0;
-        if (o.totalKillsLifetime == null) o.totalKillsLifetime = 0;
-        if (o.buffAtk == null) o.buffAtk = 0;
-        if (o.buffDef == null) o.buffDef = 0;
-        if (o.buffMHp == null) o.buffMHp = 0;
-        if (o.buffStamMax == null) o.buffStamMax = 0;
-        if (o.buffStamRegen == null) o.buffStamRegen = 0;
-        if (o.buffLootLuck == null) o.buffLootLuck = 0;
-        if (!o.cardHistory) o.cardHistory = [];
-        if (o.lastCardStageOffered == null) o.lastCardStageOffered = 0;
-        if (!o.petOwned || !o.petOwned.length) o.petOwned = ['fox'];
-        if (!o.activePetId) o.activePetId = o.petOwned[0];
-        if (o.enemyDotTurns == null) o.enemyDotTurns = 0;
-        if (o.enemyDotDmg == null) o.enemyDotDmg = 0;
-
-        if (!o.inv || !o.inv.length) o.inv = [{ id: 'espada_inicial' }];
-        else {
-            o.inv = o.inv.map(c => {
-                if (typeof c === 'string') return { id: iconToId[c] || 'espada_inicial' };
-                if (c && c.id && getItemById(c.id)) return { id: c.id };
-                return { id: 'espada_inicial' };
-            });
-        }
-
-        if (!o.equipped) o.equipped = { weapon: null, armor: null, accessory: null };
-
-        applyClassBase(o);
-
-        const wi = o.inv.findIndex(c => getItemById(c.id) && getItemById(c.id).slot === 'weapon');
-        if (o.equipped.weapon == null && wi >= 0) o.equipped.weapon = wi;
-
-        recalcStats(o);
-        return o;
+    // Continuar com todas as funções originais...
+    function getSaveRaw() {
+        return localStorage.getItem(SAVE_KEY) || localStorage.getItem(SAVE_LEGACY);
     }
 
-    function getWorldMeta(id) {
-        return WORLDS.find(w => w.id === id) || WORLDS[0];
-    }
-
-    function bumpMaxStage() {
-        p.maxStageReached = Math.max(p.maxStageReached || 1, p.stage || 1);
-    }
-
-    function carryOverMaxStageFromSave() {
-        const raw = getSaveRaw();
-        if (!raw) return;
-        try {
-            const o = migratePlayer(raw);
-            p.maxStageReached = Math.max(p.maxStageReached || 1, o.maxStageReached || 1, o.stage || 1);
-        } catch (err) { /* ignore */ }
-    }
-
-    let stamRegenStarted = false;
     function ensureStamRegen() {
         if (stamRegenStarted) return;
         stamRegenStarted = true;
@@ -603,629 +454,239 @@
         }, 1000);
     }
 
-    function applyWorldTheme() {
-        const meta = getWorldMeta(p.world);
-        const gameUi = document.getElementById('game-ui');
-        WORLDS.forEach(w => gameUi.classList.remove(w.bgClass));
-        gameUi.classList.add(meta.bgClass);
-        document.getElementById('ui-world-label').innerText = `MUNDO ${meta.id} — ${meta.name.toUpperCase()}`;
-        updateWorldProgressLine();
-    }
-
-    function updateWorldProgressLine() {
-        const el = document.getElementById('ui-world-next');
-        if (!el || typeof DMDB === 'undefined') return;
-        const g = DMDB.getGlobal();
-        const k1 = g.killsW1 || 0;
-        const k2 = g.killsW2 || 0;
-        if (k1 < WORLD2_UNLOCK_KILLS) {
-            el.textContent = `Reino Mágico: faltam ${WORLD2_UNLOCK_KILLS - k1} abate(s) na Floresta (progresso ${k1}/${WORLD2_UNLOCK_KILLS}).`;
-        } else if (k2 < WORLD3_UNLOCK_KILLS) {
-            el.textContent = `Mundo Vazio: faltam ${WORLD3_UNLOCK_KILLS - k2} abate(s) no Reino Mágico (progresso ${k2}/${WORLD3_UNLOCK_KILLS}).`;
-        } else {
-            el.textContent = 'Todos os mundos desbloqueados por abates — bom jogo!';
-        }
-    }
-
-    function updateMenuWorldButtons() {
-        const h2 = document.getElementById('hint-w2');
-        const h3 = document.getElementById('hint-w3');
-        if (h2) h2.textContent = WORLD2_UNLOCK_KILLS;
-        if (h3) h3.textContent = WORLD3_UNLOCK_KILLS;
-        const cfg = document.getElementById('btn-config');
-        if (cfg && typeof DMDB !== 'undefined') cfg.style.display = DMDB.isAdmin() ? 'block' : 'none';
-    }
-
-    function openWorldSelect() {
-        document.getElementById('menu-main').style.display = 'none';
-        document.getElementById('world-select-ui').style.display = 'flex';
-        renderWorldCards();
-    }
-
-    function closeWorldSelect() {
-        document.getElementById('world-select-ui').style.display = 'none';
-        document.getElementById('menu-main').style.display = 'flex';
-    }
-
-    function renderWorldCards() {
-        const g = typeof DMDB !== 'undefined' ? DMDB.getGlobal() : { killsW1: 0, killsW2: 0 };
-        const k1 = g.killsW1 || 0;
-        const k2 = g.killsW2 || 0;
-        const host = document.getElementById('world-cards');
-        host.innerHTML = '';
-        WORLDS.forEach(w => {
-            let locked = false;
-            let sub = 'Disponível';
-            if (w.id === 2) {
-                locked = k1 < WORLD2_UNLOCK_KILLS;
-                sub = locked ? `Mate ${WORLD2_UNLOCK_KILLS} inimigos na Floresta (${k1}/${WORLD2_UNLOCK_KILLS})` : 'Desbloqueado';
-            } else if (w.id === 3) {
-                locked = k2 < WORLD3_UNLOCK_KILLS;
-                sub = locked ? `Mate ${WORLD3_UNLOCK_KILLS} no Reino Mágico (${k2}/${WORLD3_UNLOCK_KILLS})` : 'Desbloqueado';
-            }
-            const div = document.createElement('div');
-            div.className = 'world-card' + (locked ? ' locked' : '');
-            div.innerHTML = `<div class="world-emoji">${w.emoji}</div><b style="font-family:Cinzel">${w.name}</b><div class="world-sub">${sub}</div>`;
-            if (!locked) div.onclick = () => beginAdventureInWorld(w.id);
-            host.appendChild(div);
-        });
-    }
-
-    function beginAdventureInWorld(worldId) {
-        const g = DMDB.getGlobal();
-        if (worldId === 2 && (g.killsW1 || 0) < WORLD2_UNLOCK_KILLS) return;
-        if (worldId === 3 && (g.killsW2 || 0) < WORLD3_UNLOCK_KILLS) return;
-        const raw = getSaveRaw();
-        p = defaultPlayer(worldId);
-        if (raw) {
-            try {
-                const o = JSON.parse(raw);
-                if (o.classId) p.classId = o.classId;
-                if (o.ownedClasses && o.ownedClasses.length) p.ownedClasses = o.ownedClasses.slice();
-                if (o.totalKillsLifetime != null) p.totalKillsLifetime = o.totalKillsLifetime;
-                if (o.buffAtk != null) p.buffAtk = o.buffAtk;
-                if (o.buffDef != null) p.buffDef = o.buffDef;
-                if (o.buffMHp != null) p.buffMHp = o.buffMHp;
-                if (o.buffStamMax != null) p.buffStamMax = o.buffStamMax;
-                if (o.buffStamRegen != null) p.buffStamRegen = o.buffStamRegen;
-                if (o.buffLootLuck != null) p.buffLootLuck = o.buffLootLuck;
-                if (o.cardHistory) p.cardHistory = o.cardHistory.slice();
-                if (o.petOwned) p.petOwned = o.petOwned.slice();
-                if (o.activePetId) p.activePetId = o.activePetId;
-                if (o.lastCardStageOffered != null) p.lastCardStageOffered = o.lastCardStageOffered;
-                p.killStreak = 0;
-                applyClassBase();
-            } catch (err) { /* ignore */ }
-        }
-        carryOverMaxStageFromSave();
-        bumpMaxStage();
-        document.getElementById('world-select-ui').style.display = 'none';
-        enterGameSession();
-    }
-
-    function enterGameSession() {
-        p.alive = true;
-        gamePaused = false;
-        document.getElementById('pause-overlay').style.display = 'none';
-        document.getElementById('gameover-overlay').style.display = 'none';
-        document.getElementById('world-advance-overlay').style.display = 'none';
-        applyClassBase();
+    function updateUI() {
         recalcStats();
-        document.getElementById('menu-main').style.display = 'none';
-        document.getElementById('world-select-ui').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'grid';
-        setHudVisible(true);
-        applyWorldTheme();
-        applyPlayerSprite();
-        ensureStamRegen();
-        spawn();
-        syncAdvanceButton();
-    }
+        document.getElementById('hp-bar').style.width = (p.hp/p.mHp*100) + "%";
+        document.getElementById('hp-text').innerText = `${p.hp}/${p.mHp}`;
+        const em = e.mHp > 0 ? e.mHp : 1;
+        document.getElementById('e-hp-bar').style.width = (Math.max(0, e.hp) / em * 100) + "%";
+        document.getElementById('e-hp-text').innerText = `${Math.max(0, e.hp)}/${e.mHp || 0}`;
+        const smx = p.stamMax != null ? p.stamMax : 100;
+        document.getElementById('stam-bar').style.width = (p.stam / smx * 100) + "%";
+        document.getElementById('stam-text').innerText = `${Math.floor(p.stam)}/${smx}`;
+        document.getElementById('fury-bar').style.width = p.fury + "%";
+        document.getElementById('fury-text').innerText = `${p.fury}%`;
+        
+        const cn = document.getElementById('ui-class-name');
+        if (cn) cn.textContent = 'Classe: ' + getClassById(p.classId).name;
+        
+        const s = document.getElementById('btn-spec');
+        if(p.fury >= 100) { s.classList.add('ready'); s.style.opacity = '1'; s.style.cursor = 'pointer'; }
+        else { s.classList.remove('ready'); s.style.opacity = '0.4'; s.style.cursor = 'not-allowed'; }
 
-    function showMainMenu() {
-        setHudVisible(false);
-        document.getElementById('login-ui').style.display = 'none';
-        document.getElementById('menu-main').style.display = 'flex';
-        if (getSaveRaw()) document.getElementById('btn-cont').style.display = 'block';
-        else document.getElementById('btn-cont').style.display = 'none';
-        updateMenuWorldButtons();
-    }
-
-    function tryLogin() {
-        const u = document.getElementById('login-user').value.trim();
-        const pw = document.getElementById('login-pass').value;
-        const r = DMDB.login(u, pw);
-        if (!r.ok) { alert(r.error); return; }
-        showMainMenu();
-    }
-
-    function tryRegister() {
-        const u = document.getElementById('login-user').value.trim();
-        const pw = document.getElementById('login-pass').value;
-        if (u.length < 2 || pw.length < 2) { alert('Usuário e senha precisam de pelo menos 2 caracteres.'); return; }
-        const r = DMDB.register(u, pw);
-        if (!r.ok) { alert(r.error); return; }
-        alert('Conta criada. Entre com seu usuário e senha.');
-    }
-
-    function doLogout() {
-        DMDB.logout();
-        location.reload();
-    }
-
-    function openConfig() {
-        if (!DMDB.isAdmin()) return;
-        const pre = document.getElementById('config-dump');
-        const db = {
-            global: DMDB.getGlobal(),
-            users: DMDB.getUsers().map(u => ({ name: u.name, role: u.role })),
-            saveExists: !!getSaveRaw()
-        };
-        pre.textContent = JSON.stringify(db, null, 2);
-        document.getElementById('config-ui').style.display = 'flex';
-    }
-
-    function closeConfig() {
-        document.getElementById('config-ui').style.display = 'none';
-    }
-
-    window.onload = () => {
-        DMDB.init();
-        document.getElementById('hint-w2').textContent = WORLD2_UNLOCK_KILLS;
-        document.getElementById('hint-w3').textContent = WORLD3_UNLOCK_KILLS;
-        if (DMDB.getSession()) showMainMenu();
-        else {
-            document.getElementById('login-ui').style.display = 'flex';
-            document.getElementById('menu-main').style.display = 'none';
-        }
-        updateMenuWorldButtons();
-        const b = document.getElementById('btn-block');
-        ['mousedown', 'touchstart'].forEach(ev => b.addEventListener(ev, () => isDef = true));
-        ['mouseup', 'mouseleave', 'touchend'].forEach(ev => b.addEventListener(ev, () => isDef = false));
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
-    };
-
-    function startGame(mode) {
-        if (mode === 'continue') {
-            const raw = getSaveRaw();
-            if (!raw) return;
-            p = migratePlayer(raw);
-            bumpMaxStage();
-            enterGameSession();
-        } else {
-            p = defaultPlayer(1);
-            const rawMeta = getSaveRaw();
-            if (rawMeta) {
-                try {
-                    const o = JSON.parse(rawMeta);
-                    if (o.totalKillsLifetime != null) p.totalKillsLifetime = o.totalKillsLifetime;
-                } catch (e) { /* ignore */ }
-            }
-            carryOverMaxStageFromSave();
-            bumpMaxStage();
-            enterGameSession();
-        }
-    }
-
-    function computeEnemyStats() {
-        const s = p.stage || 1;
-        const w = p.world || 1;
-        const D = getWorldDifficultyMult(w);
-        const slowExtra = 1 + (D.slow - 1) * Math.min(30, s) * 0.035;
-        const growth = (28 + s * 11 + (s * s) * 0.12) * slowExtra;
-        const wMult = 1 + (w - 1) * 0.22;
-        const mHp = Math.floor(growth * wMult * D.hp);
-        const baseDmg = 5.5 + s * 1.15 + (w - 1) * 2.4;
-        const dmg = Math.max(4, Math.floor(baseDmg * (1 + (w - 1) * 0.08) * D.dmg));
-        return { mHp, dmg };
-    }
-
-    function spawn() {
-        if(!p.alive || gamePaused) return;
-        if (shouldOfferCard()) { openCardChoice(); updateUI(); return; }
-        if(p.stage > 1 && p.stage % 5 === 0) { openShop(); updateUI(); return; }
-        e.alive = true;
-        p.enemyDotTurns = 0;
-        p.enemyDotDmg = 0;
-        const meta = getWorldMeta(p.world);
-        const st = computeEnemyStats();
-        e.mHp = st.mHp; e.hp = e.mHp;
-        e.dmg = st.dmg;
-        document.getElementById('e-name').innerText = meta.enemyPrefix + " · SALA " + p.stage;
-        addLog(`${meta.name} — Sala ${p.stage}: combate!`, '#fff');
-        enemyTurn();
-        updateUI();
-    }
-
-    function openShop() {
-        shopOpen = true;
-        e.alive = false;
-        clearTimeout(turnTimer);
-        document.getElementById('shop-ui').style.display = 'flex';
-        document.getElementById('shop-gold-val').innerText = p.gold;
-        const grid = document.getElementById('shop-items');
-        grid.innerHTML = '';
-
-        const offers = [];
-        const classPool = itemsDb.filter(it => it.slot === 'class' && it.price > 0 && (!p.ownedClasses || !p.ownedClasses.includes(it.classId)));
-        if (classPool.length) {
-            offers.push(classPool[Math.floor(Math.random() * classPool.length)]);
-        }
-        let guard = 0;
-        while (offers.length < 3 && guard++ < 50) {
-            const rnd = Math.random();
-            let pool = itemsDb.filter(it => it.price > 0 && it.slot !== 'class' && it.rarity >= (rnd - 0.5));
-            if (!pool.length) pool = itemsDb.filter(it => it.price > 0 && it.slot !== 'class');
-            const item = pool[Math.floor(Math.random() * pool.length)];
-            if (item && !offers.some(o => o.id === item.id)) offers.push(item);
-        }
-        const nonClass = itemsDb.filter(it => it.price > 0 && it.slot !== 'class');
-        while (offers.length < 3 && nonClass.length) {
-            const fb = nonClass[offers.length % nonClass.length];
-            if (!offers.some(o => o.id === fb.id)) offers.push(fb);
-            else break;
-        }
-        offers.sort(() => Math.random() - 0.5);
-
-        offers.forEach(item => {
-            const div = document.createElement('div');
-            div.className = `shop-item ${item.rarity < 0.2 ? 'rarity-legendary' : ''}`;
-            const tag = item.slot === 'class' ? '<br><small style="color:#a78bfa">Classe</small>' : '';
-            div.innerHTML = `<div style="font-size:2rem">${item.icon}</div><b>${item.name}</b>${tag}<br><span style="color:var(--gold)">💰 ${item.price}</span>`;
-            div.onclick = () => buyItem(item, div);
-            grid.appendChild(div);
-        });
-    }
-
-    function buyItem(it, element) {
-        if (element.classList.contains('sold-out')) return;
-
-        if (it.slot === 'class') {
-            if (p.ownedClasses && p.ownedClasses.includes(it.classId)) {
-                addLog('Você já domina esta classe!', '#f59e0b');
-                return;
-            }
-            if (p.gold < it.price) {
-                addLog('Ouro insuficiente!', '#f43f5e');
-                return;
-            }
-            p.gold -= it.price;
-            p.ownedClasses = p.ownedClasses || ['heroi'];
-            if (!p.ownedClasses.includes(it.classId)) p.ownedClasses.push(it.classId);
-            p.classId = it.classId;
-            applyClassBase();
-            recalcStats();
-            applyPlayerSprite();
-            element.classList.add('sold-out');
-            element.innerHTML = `<div style="font-size:2rem">🚫</div><b>ESGOTADO</b><br><span style="color:#666">COMPRADO</span>`;
-            document.getElementById('shop-gold-val').innerText = p.gold;
-            addLog(`Classe adquirida: ${getClassById(it.classId).name}!`, '#a78bfa');
-            save();
-            updateUI();
-            return;
-        }
-
-        if (p.gold >= it.price && p.inv.length < 12) {
-            p.gold -= it.price;
-            p.inv.push({ id: it.id });
-            element.classList.add('sold-out');
-            element.innerHTML = `<div style="font-size:2rem">🚫</div><b>ESGOTADO</b><br><span style="color:#666">COMPRADO</span>`;
-            document.getElementById('shop-gold-val').innerText = p.gold;
-            addLog(`Você comprou ${it.name}! (equipe ou use no inventário)`, '#10b981');
-            recalcStats();
-            save();
-            updateUI();
-        } else {
-            addLog('Ouro insuficiente ou mochila cheia!', '#f43f5e');
-        }
-    }
-
-    function closeShop() {
-        shopOpen = false;
-        document.getElementById('shop-ui').style.display = 'none';
-        p.stage++;
-        bumpMaxStage();
-        save();
-        spawn();
-    }
-
-    function applyPetTurnEffects() {
-        const pet = getActivePet();
-        if (!pet || !e.alive) return;
-
-        if (pet.type === 'dot') {
-            if (p.enemyDotTurns > 0) {
-                e.hp -= p.enemyDotDmg;
-                p.enemyDotTurns--;
-                addLog(`${pet.emoji} veneno: ${p.enemyDotDmg} de dano`, '#22c55e');
-            } else if (Math.random() < 0.33) {
-                p.enemyDotDmg = Math.max(2, Math.floor(2 + p.stage * 0.12));
-                p.enemyDotTurns = 3;
-                addLog(`${pet.emoji} aplicou veneno!`, '#84cc16');
-            }
-        } else if (pet.type === 'damage' && Math.random() < 0.55) {
-            const hit = Math.max(2, Math.floor(3 + p.stage * 0.22));
-            e.hp -= hit;
-            addLog(`${pet.emoji} atacou: ${hit} dano passivo`, '#fca5a5');
-        }
-
-        if (e.hp <= 0 && e.alive) {
-            damageEnemy(0, false, true);
-        }
-    }
-
-    function applyPetLootBonus() {
-        const pet = getActivePet();
-        if (!pet || pet.type !== 'loot') return;
-        if (Math.random() < 0.4) {
-            const gold = 8 + Math.floor(Math.random() * 12);
-            p.gold += gold;
-            addLog(`${pet.emoji} trouxe +${gold} ouro`, '#fbbf24');
-        } else if (Math.random() < 0.25 && p.inv.length < 12) {
-            const candidate = itemsDb.filter(it => it.slot !== 'class' && it.price > 0 && it.id !== 'espada_inicial');
-            const item = candidate[Math.floor(Math.random() * candidate.length)];
-            if (item) {
-                p.inv.push({ id: item.id });
-                addLog(`${pet.emoji} encontrou ${item.icon} ${item.name}!`, '#c4b5fd');
-            }
-        }
-    }
-
-    function enemyTurn() {
-        if(!e.alive || !p.alive || shopOpen || gamePaused) return;
-        turnTimer = setTimeout(() => {
-            if(!e.alive || !p.alive || shopOpen || gamePaused) return;
-            applyPetTurnEffects();
-            if (!e.alive || e.hp <= 0) { updateUI(); return; }
-            triggerAnim('p-box', 'anim-shake');
-
-            if (p.classId === 'arqueiro' && Math.random() < (p.dodgeChance || 0)) {
-                addLog('Esquiva perfeita do Arqueiro!', '#38bdf8');
-                updateUI();
-                enemyTurn();
-                return;
-            }
-            if (p.classId === 'tank' && Math.random() < (p.standChance || 0)) {
-                addLog('Tank aguentou o golpe sem dano!', '#fbbf24');
-                updateUI();
-                enemyTurn();
-                return;
-            }
-
-            let d;
-            if (isDef) {
-                d = Math.max(1, Math.floor(e.dmg * 0.12 - (p.def * 0.08)));
-            } else {
-                d = Math.max(2, Math.floor(e.dmg - (p.def * 0.55)));
-            }
-            p.hp -= d;
-            p.killStreak = 0;
-            addLog(`Dano recebido: ${d}${isDef ? ' (bloqueio)' : ''}`, '#f43f5e');
-            if(p.hp <= 0) { p.alive = false; showGameOver(); return; }
-            updateUI(); enemyTurn();
-        }, 2800);
-    }
-
-    function doAction(type) {
-        const cost = p.atkStamCost != null ? p.atkStamCost : 12;
-        if(!e.alive || !p.alive || shopOpen || gamePaused || (type === 'attack' && p.stam < cost)) return;
-        if(type === 'attack') {
-            p.stam -= cost; p.fury = Math.min(100, p.fury + 15);
-            triggerAnim('p-box', 'anim-atk'); triggerAnim('e-box', 'anim-shake');
-            const crit = p.classId === 'cavaleiro' && Math.random() < (p.critChance || 0);
-            const val = crit ? Math.floor(p.atk * 1.75) : p.atk;
-            damageEnemy(val, crit);
-        } else if(type === 'special' && p.fury >= 100) {
-            p.fury = 0; triggerAnim('p-box', 'anim-atk');
-            const crit = p.classId === 'cavaleiro' && Math.random() < ((p.critChance || 0) * 0.7);
-            const val = crit ? Math.floor(p.atk * 4.2) : Math.floor(p.atk * 3.4);
-            addLog("ULTI ATIVADA!", '#8b5cf6'); damageEnemy(val, crit);
-        }
-    }
-
-    function damageEnemy(val, isCrit, fromPet) {
-        const variance = 1 + Math.floor(Math.random() * (4 + Math.min(6, p.stage / 3)));
-        let d = Math.floor(val + Math.random() * variance);
-        if (fromPet) d = 0;
-        e.hp -= d;
-        if (isCrit) addLog(`CRÍTICO! ${d} de dano!`, '#f472b6');
-        else if (!fromPet) addLog(`Você causou ${d} de dano!`, '#10b981');
-        if(e.hp <= 0) { 
-            e.alive = false; clearTimeout(turnTimer); 
-            p.stage++;
-            p.killStreak = (p.killStreak || 0) + 1;
-            p.totalKillsLifetime = (p.totalKillsLifetime || 0) + 1;
-            const D = getWorldDifficultyMult(p.world || 1);
-            const baseGold = Math.floor((38 + Math.floor(p.stage * 1.4) + (p.world - 1) * 10) * D.gold);
-            const streakBonus = Math.min(40, (p.killStreak - 1) * 5);
-            const goldGain = baseGold + streakBonus;
-            p.gold += goldGain;
-            applyPetLootBonus();
-            rollLootOnKill();
-            if (typeof DMDB !== 'undefined') {
-                if (p.world === 1) DMDB.incrementKill(1);
-                if (p.world === 2) DMDB.incrementKill(2);
-            }
-            checkWorldAdvanceAfterKill();
-            bumpMaxStage();
-            addLog(`Vitória! ${formatVictoryGold(goldGain, streakBonus)}`, '#f59e0b');
-            save();
-            if (gamePaused) { updateUI(); return; }
-            setTimeout(spawn, 1150);
-        }
-        updateUI();
-    }
-
-    function checkWorldAdvanceAfterKill() {
-        if (typeof DMDB === 'undefined') return;
-        const g = DMDB.getGlobal();
-        if (p.world === 1 && g.killsW1 === WORLD2_UNLOCK_KILLS) showWorldAdvanceModal(2);
-        else if (p.world === 2 && g.killsW2 === WORLD3_UNLOCK_KILLS) showWorldAdvanceModal(3);
-    }
-
-    function showWorldAdvanceModal(targetWorld) {
-        pendingAdvanceTarget = targetWorld;
-        gamePaused = true;
-        clearTimeout(turnTimer);
-        const titles = { 2: 'Reino Mágico', 3: 'Mundo Vazio' };
-        document.getElementById('world-advance-title').textContent = titles[targetWorld] + ' desbloqueado!';
-        document.getElementById('world-advance-text').innerHTML =
-            'Avançar agora: <b>loot e ouro melhores</b>, inimigos <b>mais fortes</b> e progressão <b>mais lenta</b> (mais resistência por sala).<br><br>' +
-            'Ou fique neste mundo sem limite de salas (infinito) e use o botão <b>PRÓXIMO MUNDO</b> no canto quando quiser.';
-        document.getElementById('world-advance-overlay').style.display = 'flex';
-        syncAdvanceButton();
-    }
-
-    function openWorldAdvanceFromButton() {
-        if (typeof DMDB === 'undefined') return;
-        const g = DMDB.getGlobal();
-        if (p.world === 1 && g.killsW1 >= WORLD2_UNLOCK_KILLS) showWorldAdvanceModal(2);
-        else if (p.world === 2 && g.killsW2 >= WORLD3_UNLOCK_KILLS) showWorldAdvanceModal(3);
-    }
-
-    function dismissWorldAdvance() {
-        document.getElementById('world-advance-overlay').style.display = 'none';
-        gamePaused = false;
-        pendingAdvanceTarget = null;
-        syncAdvanceButton();
-        spawn();
-    }
-
-    function confirmWorldAdvance() {
-        const next = pendingAdvanceTarget;
-        document.getElementById('world-advance-overlay').style.display = 'none';
-        gamePaused = false;
-        pendingAdvanceTarget = null;
-        if (!next || next !== p.world + 1) { syncAdvanceButton(); return; }
-        p.world = next;
-        p.stage = 1;
-        p.killStreak = 0;
-        save();
-        applyWorldTheme();
-        applyPlayerSprite();
-        clearTimeout(turnTimer);
-        spawn();
-        syncAdvanceButton();
-    }
-
-    function syncAdvanceButton() {
-        const btn = document.getElementById('btn-advance-world');
-        if (!btn || typeof DMDB === 'undefined') return;
-        const g = DMDB.getGlobal();
-        let show = false;
-        if (p.world === 1 && g.killsW1 >= WORLD2_UNLOCK_KILLS) show = true;
-        if (p.world === 2 && g.killsW2 >= WORLD3_UNLOCK_KILLS) show = true;
-        btn.style.display = show ? 'inline-block' : 'none';
-    }
-
-    function togglePause() {
-        gamePaused = !gamePaused;
-        const ov = document.getElementById('pause-overlay');
-        ov.style.display = gamePaused ? 'flex' : 'none';
-        if (gamePaused) clearTimeout(turnTimer);
-        else if (e.alive && p.alive && !shopOpen) enemyTurn();
-    }
-
-    function saveAndReturnMenu() {
-        save();
-        gamePaused = false;
-        document.getElementById('pause-overlay').style.display = 'none';
-        document.getElementById('gameover-overlay').style.display = 'none';
-        document.getElementById('world-advance-overlay').style.display = 'none';
-        clearTimeout(turnTimer);
-        document.getElementById('game-ui').style.display = 'none';
-        document.getElementById('shop-ui').style.display = 'none';
-        shopOpen = false;
-        setHudVisible(false);
-        showMainMenu();
-    }
-
-    function showGameOver() {
-        gamePaused = true;
-        clearTimeout(turnTimer);
-        document.getElementById('gameover-overlay').style.display = 'flex';
-    }
-
-    function gameOverRetry() {
-        document.getElementById('gameover-overlay').style.display = 'none';
-        gamePaused = false;
-        p.alive = true;
-        recalcStats();
-        p.hp = p.mHp;
-        p.stam = p.stamMax != null ? p.stamMax : 100;
-        p.fury = 0;
-        clearTimeout(turnTimer);
-        spawn();
-    }
-
-    function gameOverToMenu() {
-        document.getElementById('gameover-overlay').style.display = 'none';
-        gamePaused = false;
-        p.alive = false;
-        document.getElementById('game-ui').style.display = 'none';
-        setHudVisible(false);
-        showMainMenu();
-    }
-
-    function formatVictoryGold(total, streakExtra) {
-        if (streakExtra > 0) return `+${total} ouro (inclui +${streakExtra} de streak)`;
-        return `+${total} ouro`;
-    }
-
-    function equipBonusesFromState() {
-        let atk = 0, def = 0, mhp = 0;
-        ['weapon', 'armor', 'accessory'].forEach(slot => {
-            const idx = p.equipped[slot];
-            if (idx == null) return;
-            const cell = p.inv[idx];
-            if (!cell || !cell.id) return;
-            const it = getItemById(cell.id);
-            const sk = equipSlotKeyForItem(it);
-            if (!it || sk !== slot) return;
-            atk += it.bonusAtk || 0;
-            def += it.bonusDef || 0;
-            mhp += it.bonusMHp || 0;
-        });
-        return { atk, def, mhp };
-    }
-
-    function renderEquipPanel() {
-        const slotsEl = document.getElementById('equip-slots');
-        const totEl = document.getElementById('equip-totals');
-        if (!slotsEl || !totEl) return;
-        const labels = { weapon: 'Arma', armor: 'Armadura / escudo', accessory: 'Acessório' };
-        let html = '';
-        ['weapon', 'armor', 'accessory'].forEach(key => {
-            const idx = p.equipped[key];
-            let line = '—';
-            if (idx != null && p.inv[idx]) {
-                const it = getItemById(p.inv[idx].id);
-                if (it) {
-                    const bits = [];
-                    if (it.bonusAtk) bits.push(`+${it.bonusAtk} ATK`);
-                    if (it.bonusDef) bits.push(`+${it.bonusDef} DEF`);
-                    if (it.bonusMHp) bits.push(`+${it.bonusMHp} HP máx.`);
-                    line = `${it.icon} ${it.name}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`;
+        document.getElementById('ui-gold').innerText = p.gold;
+        document.getElementById('ui-stage').innerText = p.stage;
+        const ust = document.getElementById('ui-streak');
+        if (ust) ust.textContent = p.killStreak != null ? p.killStreak : 0;
+        const ulk = document.getElementById('ui-luck');
+        if (ulk) ulk.textContent = getLootLuckPercent() + '%';
+        const blk = document.getElementById('btn-block');
+        if (blk) blk.classList.toggle('is-blocking', !!isDef);
+        
+        // Atualizar informações do pet (sistema novo)
+        const pui = document.getElementById('pet-ui');
+        if (pui) {
+            if (p.petAtual) {
+                const pet = p.petAtual;
+                const level = pet.level || 1;
+                const effectMultiplier = 1 + (level - 1) * 0.5;
+                const finalEffect = Math.floor(pet.baseEffect * effectMultiplier);
+                
+                let effectText = '';
+                switch (pet.effectType) {
+                    case 'gold_per_wave': effectText = `+${finalEffect} ouro/onda`; break;
+                    case 'stamina_regen': effectText = `+${finalEffect}% regen stamina`; break;
+                    case 'drop_chance': effectText = `+${finalEffect}% drop chance`; break;
+                    case 'rare_drop': effectText = `+${finalEffect}% itens raros`; break;
+                    case 'passive_damage': effectText = `+${finalEffect} dano/turno`; break;
+                    case 'atk_buff': effectText = `+${finalEffect} ATK`; break;
+                    case 'def_buff': effectText = `+${finalEffect} DEF`; break;
+                    case 'hp_buff': effectText = `+${finalEffect} HP`; break;
                 }
+                
+                pui.innerHTML = `Pet: <b>${pet.emoji} ${pet.name} (Nível ${level})</b><br><small style="color:#94a3b8">${effectText}</small>`;
+            } else {
+                const proximaOferta = p.petWorldOffered ? 'Próximo mundo' : `${10 - (p.stage % 10)} ondas`;
+                const proximoMercante = p.stage % 5 === 0 ? 'Agora!' : `${5 - (p.stage % 5)} ondas`;
+                pui.innerHTML = `Pet: <b>Nenhum</b><br><small style="color:#94a3b8">Próxima oferta: ${proximaOferta}</small><br><small style="color:#f59e0b">Mercante: ${proximoMercante}</small>`;
             }
-            html += `<div class="equip-line"><span>${labels[key]}</span><b>${line}</b></div>`;
-        });
-        slotsEl.innerHTML = html;
-        const b = equipBonusesFromState();
-        const parts = [];
-        if (b.atk) parts.push(`+${b.atk} ATK`);
-        if (b.def) parts.push(`+${b.def} DEF`);
-        if (b.mhp) parts.push(`+${b.mhp} HP máx.`);
-        totEl.innerHTML = parts.length
-            ? `Bônus do equipamento: ${parts.join(' · ')}`
-            : 'Bônus do equipamento: nenhum (equipe armas / escudos / amuletos no inventário).';
+        }
+        
+        const bui = document.getElementById('buff-ui');
+        if (bui) bui.innerHTML = `Buffs acumulados: <b>${(p.cardHistory || []).length}</b>`;
+        
+        document.getElementById('ui-atk').innerText = p.atk;
+        document.getElementById('ui-def').innerText = p.def;
+
+        // Inventário
+        const inv = document.getElementById('inv-grid');
+        inv.innerHTML = '';
+        for (let i = 0; i < 12; i++) {
+            const cell = p.inv[i];
+            const slot = document.createElement('div');
+            slot.className = 'inv-slot' + (!cell ? ' inv-empty' : '') + 
+                            (cell && isInvIndexEquipped(i) ? ' inv-equipped' : '');
+            if (cell) {
+                const it = getItemById(cell.id);
+                slot.textContent = it ? it.icon : '?';
+                slot.title = it ? `${it.name} — clique para equipar/usar` : '';
+                slot.onclick = () => invClick(i);
+            }
+            inv.appendChild(slot);
+        }
+        
+        renderEquipPanel();
+    }
+
+    function isInvIndexEquipped(idx) {
+        if (!p.equipped) return false;
+        return p.equipped.weapon === idx || p.equipped.armor === idx || p.equipped.accessory === idx;
+    }
+
+    function equipSlotKeyForItem(it) {
+        if (!it) return null;
+        if (it.slot === 'class') return null;
+        if (it.slot === 'weapon') return 'weapon';
+        if (it.slot === 'armor') return 'armor';
+        if (it.slot === 'accessory') return 'accessory';
+        return null;
     }
 
     function invClick(index) {
         if (!p.inv[index]) return;
         const cell = p.inv[index];
+        
+        // Verificar se é um dos novos itens
+        if (cell.id === 'pocao_grande') {
+            const heal = 80;
+            p.hp = Math.min(p.mHp, p.hp + heal);
+            p.inv.splice(index, 1);
+            fixEquippedIndicesAfterRemove(index);
+            addLog(`Usou Poção Grande! (+${heal} HP)`, '#10b981');
+            recalcStats();
+            save();
+            updateUI();
+            return;
+        }
+        
+        if (cell.id === 'escudo_reforcado') {
+            // Equipar/desequipar escudo
+            if (p.equipped.armor === index) {
+                p.equipped.armor = null;
+                p.baseDef = (p.baseDef || 0) - 5;
+                addLog(`Desequipou Escudo Reforçado! (-5 DEF)`, '#94a3b8');
+            } else {
+                // Remover escudo anterior se existir
+                if (p.equipped.armor !== null) {
+                    p.baseDef = (p.baseDef || 0) - 5;
+                }
+                p.equipped.armor = index;
+                p.baseDef = (p.baseDef || 0) + 5;
+                addLog(`Equipou Escudo Reforçado! (+5 DEF)`, '#10b981');
+            }
+            recalcStats();
+            save();
+            updateUI();
+            return;
+        }
+        
+        if (cell.id === 'espada_afiada') {
+            // Equipar/desequipar espada
+            if (p.equipped.weapon === index) {
+                p.equipped.weapon = null;
+                p.baseAtk = (p.baseAtk || 0) - 8;
+                addLog(`Desequipou Espada Afiada! (-8 ATK)`, '#94a3b8');
+            } else {
+                // Remover espada anterior se existir
+                if (p.equipped.weapon !== null && p.equipped.weapon !== 0) {
+                    const oldItem = p.inv[p.equipped.weapon];
+                    if (oldItem && oldItem.id !== 'espada_inicial') {
+                        p.baseAtk = (p.baseAtk || 0) - 8;
+                    }
+                }
+                p.equipped.weapon = index;
+                p.baseAtk = (p.baseAtk || 0) + 8;
+                addLog(`Equipou Espada Afiada! (+8 ATK)`, '#10b981');
+            }
+            recalcStats();
+            save();
+            updateUI();
+            return;
+        }
+        
+        if (cell.id === 'armadura_leve') {
+            // Equipar/desequipar armadura
+            if (p.equipped.armor === index) {
+                p.equipped.armor = null;
+                p.baseMHp = (p.baseMHp || 0) - 10;
+                p.hp = Math.min(p.hp, p.baseMHp + (p.buffMHp || 0));
+                addLog(`Desequipou Armadura Leve! (-10 HP)`, '#94a3b8');
+            } else {
+                // Remover armadura anterior se existir
+                if (p.equipped.armor !== null) {
+                    const oldItem = p.inv[p.equipped.armor];
+                    if (oldItem && oldItem.id !== 'escudo_reforcado') {
+                        p.baseMHp = (p.baseMHp || 0) - 10;
+                    }
+                }
+                p.equipped.armor = index;
+                p.baseMHp = (p.baseMHp || 0) + 10;
+                p.hp = Math.min(p.hp + 10, p.baseMHp + (p.buffMHp || 0));
+                addLog(`Equipou Armadura Leve! (+10 HP)`, '#10b981');
+            }
+            recalcStats();
+            save();
+            updateUI();
+            return;
+        }
+        
+        if (cell.id === 'botas_veloz') {
+            // Equipar/desequipar botas
+            if (p.equipped.accessory === index) {
+                p.equipped.accessory = null;
+                p.staminaRegenBonus = (p.staminaRegenBonus || 0) - 15;
+                addLog(`Desequipou Botas Veloz! (-15% regen stamina)`, '#94a3b8');
+            } else {
+                // Remover acessório anterior se existir
+                if (p.equipped.accessory !== null) {
+                    const oldItem = p.inv[p.equipped.accessory];
+                    if (oldItem && oldItem.id !== 'anel_dsorte') {
+                        p.staminaRegenBonus = (p.staminaRegenBonus || 0) - 15;
+                    }
+                }
+                p.equipped.accessory = index;
+                p.staminaRegenBonus = (p.staminaRegenBonus || 0) + 15;
+                addLog(`Equipou Botas Veloz! (+15% regen stamina)`, '#10b981');
+            }
+            save();
+            updateUI();
+            return;
+        }
+        
+        if (cell.id === 'anel_dsorte') {
+            // Equipar/desequipar anel
+            if (p.equipped.accessory === index) {
+                p.equipped.accessory = null;
+                p.buffLootLuck = (p.buffLootLuck || 0) - 3;
+                addLog(`Desequipou Anel da Sorte! (-3% sorte de loot)`, '#94a3b8');
+            } else {
+                // Remover acessório anterior se existir
+                if (p.equipped.accessory !== null) {
+                    const oldItem = p.inv[p.equipped.accessory];
+                    if (oldItem && oldItem.id !== 'botas_veloz') {
+                        p.staminaRegenBonus = (p.staminaRegenBonus || 0) - 15;
+                    }
+                }
+                p.equipped.accessory = index;
+                p.buffLootLuck = (p.buffLootLuck || 0) + 3;
+                addLog(`Equipou Anel da Sorte! (+3% sorte de loot)`, '#10b981');
+            }
+            save();
+            updateUI();
+            return;
+        }
+
+        // Código original para itens existentes
         const it = getItemById(cell.id);
         if (!it) return;
 
@@ -1256,68 +717,89 @@
         updateUI();
     }
 
-    function updateUI() {
-        recalcStats();
-        const eb = equipBonusesFromState();
-        document.getElementById('hp-bar').style.width = (p.hp/p.mHp*100) + "%";
-        document.getElementById('hp-text').innerText = `${p.hp}/${p.mHp}`;
-        const em = e.mHp > 0 ? e.mHp : 1;
-        document.getElementById('e-hp-bar').style.width = (Math.max(0, e.hp) / em * 100) + "%";
-        document.getElementById('e-hp-text').innerText = `${Math.max(0, e.hp)}/${e.mHp || 0}`;
-        const smx = p.stamMax != null ? p.stamMax : 100;
-        document.getElementById('stam-bar').style.width = (p.stam / smx * 100) + "%";
-        document.getElementById('stam-text').innerText = `${Math.floor(p.stam)}/${smx}`;
-        document.getElementById('fury-bar').style.width = p.fury + "%";
-        document.getElementById('fury-text').innerText = `${p.fury}%`;
-        const cn = document.getElementById('ui-class-name');
-        if (cn) cn.textContent = 'Classe: ' + getClassById(p.classId).name;
-        
-        const s = document.getElementById('btn-spec');
-        if(p.fury >= 100) { s.classList.add('ready'); s.style.opacity = '1'; s.style.cursor = 'pointer'; }
-        else { s.classList.remove('ready'); s.style.opacity = '0.4'; s.style.cursor = 'not-allowed'; }
-
-        document.getElementById('ui-gold').innerText = p.gold;
-        document.getElementById('ui-stage').innerText = p.stage;
-        const ust = document.getElementById('ui-streak');
-        if (ust) ust.textContent = p.killStreak != null ? p.killStreak : 0;
-        const ulk = document.getElementById('ui-luck');
-        if (ulk) ulk.textContent = getLootLuckPercent() + '%';
-        const blk = document.getElementById('btn-block');
-        if (blk) blk.classList.toggle('is-blocking', !!isDef);
-        const pet = getActivePet();
-        const pui = document.getElementById('pet-ui');
-        if (pui) {
-            const petLabel = pet ? `${pet.emoji} ${pet.name}` : 'Nenhum';
-            const owned = (p.petOwned || []).map(id => (getPetById(id) || {}).emoji).filter(Boolean).join(' ');
-            pui.innerHTML = `Pet: <b>${petLabel}</b>${owned ? ` · Coleção: ${owned}` : ''}`;
-        }
-        const bui = document.getElementById('buff-ui');
-        if (bui) bui.innerHTML = `Buffs acumulados: <b>${(p.cardHistory || []).length}</b>`;
-        document.getElementById('ui-atk').innerText = p.atk + (eb.atk ? ` (${p.baseAtk}+${eb.atk})` : '');
-        document.getElementById('ui-def').innerText = p.def + (eb.def ? ` (${p.baseDef}+${eb.def})` : '');
-
-        const inv = document.getElementById('inv-grid');
-        inv.innerHTML = '';
-        for (let i = 0; i < 12; i++) {
-            const cell = p.inv[i];
-            const slot = document.createElement('div');
-            slot.className = 'inv-slot' + (!cell ? ' inv-empty' : '') + (cell && isInvIndexEquipped(i) ? ' inv-equipped' : '');
-            if (cell) {
-                const it = getItemById(cell.id);
-                slot.textContent = it ? it.icon : '?';
-                slot.title = it ? `${it.name} — clique para equipar/usar` : '';
-                slot.onclick = () => invClick(i);
-            }
-            inv.appendChild(slot);
-        }
-        renderEquipPanel();
-        updateWorldProgressLine();
-        syncAdvanceButton();
+    function fixEquippedIndicesAfterRemove(removedIndex) {
+        if (!p.equipped) return;
+        ['weapon', 'armor', 'accessory'].forEach(s => {
+            const v = p.equipped[s];
+            if (v == null) return;
+            if (v === removedIndex) p.equipped[s] = null;
+            else if (v > removedIndex) p.equipped[s] = v - 1;
+        });
     }
 
-    function setHudVisible(visible) {
-        const h = document.getElementById('hud-top');
-        if (h) h.style.display = visible ? 'flex' : 'none';
+    function renderEquipPanel() {
+        const slotsEl = document.getElementById('equip-slots');
+        const totEl = document.getElementById('equip-totals');
+        if (!slotsEl || !totEl) return;
+        const labels = { weapon: 'Arma', armor: 'Armadura / escudo', accessory: 'Acessório' };
+        let html = '';
+        ['weapon', 'armor', 'accessory'].forEach(key => {
+            const idx = p.equipped[key];
+            let line = '—';
+            if (idx != null && p.inv[idx]) {
+                const cell = p.inv[idx];
+                // Verificar se é um dos novos itens
+                if (cell.id === 'pocao_grande') {
+                    line = '🧪 Poção Grande (uso único)';
+                } else if (cell.id === 'escudo_reforcado') {
+                    line = '🛡️ Escudo Reforçado (+5 DEF)';
+                } else if (cell.id === 'espada_afiada') {
+                    line = '⚔️ Espada Afiada (+8 ATK)';
+                } else if (cell.id === 'armadura_leve') {
+                    line = '🎽 Armadura Leve (+10 HP)';
+                } else if (cell.id === 'botas_veloz') {
+                    line = '👟 Botas Veloz (+15% regen stamina)';
+                } else if (cell.id === 'anel_dsorte') {
+                    line = '💍 Anel da Sorte (+3% sorte de loot)';
+                } else {
+                    // Itens originais
+                    const it = getItemById(cell.id);
+                    if (it) {
+                        const bits = [];
+                        if (it.bonusAtk) bits.push(`+${it.bonusAtk} ATK`);
+                        if (it.bonusDef) bits.push(`+${it.bonusDef} DEF`);
+                        if (it.bonusMHp) bits.push(`+${it.bonusMHp} HP máx.`);
+                        line = `${it.icon} ${it.name}${bits.length ? ' (' + bits.join(', ') + ')' : ''}`;
+                    }
+                }
+            }
+            html += `<div class="equip-line"><span>${labels[key]}</span><b>${line}</b></div>`;
+        });
+        slotsEl.innerHTML = html;
+        
+        let atk = 0, def = 0, mhp = 0;
+        ['weapon', 'armor', 'accessory'].forEach(slot => {
+            const idx = p.equipped[slot];
+            if (idx == null) return;
+            const cell = p.inv[idx];
+            if (!cell || !cell.id) return;
+            const it = getItemById(cell.id);
+            if (!it || it.slot !== slot) return;
+            atk += it.bonusAtk || 0;
+            def += it.bonusDef || 0;
+            mhp += it.bonusMHp || 0;
+        });
+        
+        const parts = [];
+        if (atk) parts.push(`+${atk} ATK`);
+        if (def) parts.push(`+${def} DEF`);
+        if (mhp) parts.push(`+${mhp} HP máx.`);
+        totEl.innerHTML = parts.length
+            ? `Bônus do equipamento: ${parts.join(' · ')}`
+            : 'Bônus do equipamento: nenhum (equipe armas / escudos / amuletos no inventário).';
+    }
+
+    function getLootLuckPercent() {
+        const k = p.totalKillsLifetime || 0;
+        const w = (p.world || 1) - 1;
+        const b = p.buffLootLuck || 0;
+        return Math.min(20, Math.round((k * 0.015 + w * 1.1 + b) * 10) / 10);
+    }
+
+    function applyPlayerSprite() {
+        const c = getClassById(p.classId);
+        const el = document.getElementById('player-sprite');
+        if (el) el.style.backgroundImage = `url('${c.sprite}')`;
     }
 
     function addLog(m, c) {
@@ -1332,13 +814,640 @@
 
     function triggerAnim(id, cls) {
         let el = document.getElementById(id);
-        el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+        if (el) {
+            el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+        }
     }
+
     function save() {
-        bumpMaxStage();
         localStorage.setItem(SAVE_KEY, JSON.stringify(p));
-        updateMenuWorldButtons();
     }
+
+    // Continuar com as funções de combate e sistema...
+    function computeEnemyStats() {
+        const s = p.stage || 1;
+        const w = p.world || 1;
+        const D = getWorldDifficultyMult(w);
+        const slowExtra = 1 + (D.slow - 1) * Math.min(30, s) * 0.035;
+        const growth = (28 + s * 11 + (s * s) * 0.12) * slowExtra;
+        const wMult = 1 + (w - 1) * 0.22;
+        const mHp = Math.floor(growth * wMult * D.hp);
+        const baseDmg = 5.5 + s * 1.15 + (w - 1) * 2.4;
+        const dmg = Math.max(4, Math.floor(baseDmg * (1 + (w - 1) * 0.08) * D.dmg));
+        return { mHp, dmg };
+    }
+
+    function spawn() {
+        if(!p.alive || gamePaused) return;
+        
+        e.alive = true;
+        p.enemyDotTurns = 0;
+        p.enemyDotDmg = 0;
+        const meta = getWorldMeta(p.world);
+        const st = computeEnemyStats();
+        e.mHp = st.mHp; e.hp = e.mHp;
+        e.dmg = st.dmg;
+        document.getElementById('e-name').innerText = meta.enemyPrefix + " · SALA " + p.stage;
+        addLog(`${meta.name} — Sala ${p.stage}: combate!`, '#fff');
+        enemyTurn();
+        updateUI();
+    }
+
+    function enemyTurn() {
+        if(!e.alive || !p.alive || shopOpen || gamePaused) return;
+        turnTimer = setTimeout(() => {
+            if(!e.alive || !p.alive || shopOpen || gamePaused) return;
+            
+            // Aplicar dano passivo do pet no início do turno do inimigo
+            const danoPassivo = PetSystem.aplicarDanoPassivo(p, e);
+            if (danoPassivo > 0) {
+                addLog(`Pet causou ${danoPassivo} de dano!`, '#a78bfa');
+                updateUI();
+            }
+            
+            triggerAnim('p-box', 'anim-shake');
+
+            let d;
+            if (isDef) {
+                d = Math.max(1, Math.floor(e.dmg * 0.12 - (p.def * 0.08)));
+            } else {
+                d = Math.max(2, Math.floor(e.dmg - (p.def * 0.55)));
+            }
+            p.hp -= d;
+            p.killStreak = 0;
+            addLog(`Dano recebido: ${d}${isDef ? ' (bloqueio)' : ''}`, '#f43f5e');
+            if(p.hp <= 0) { p.alive = false; showGameOver(); return; }
+            updateUI(); enemyTurn();
+        }, 2800);
+    }
+
+    function doAction(type) {
+        const cost = p.atkStamCost != null ? p.atkStamCost : 12;
+        if(!e.alive || !p.alive || shopOpen || gamePaused || (type === 'attack' && p.stam < cost)) return;
+        if(type === 'attack') {
+            p.stam -= cost; p.fury = Math.min(100, p.fury + 15);
+            triggerAnim('p-box', 'anim-atk'); triggerAnim('e-box', 'anim-shake');
+            const val = p.atk;
+            damageEnemy(val, false);
+        } else if(type === 'special' && p.fury >= 100) {
+            p.fury = 0; triggerAnim('p-box', 'anim-atk');
+            const val = Math.floor(p.atk * 3.4);
+            addLog("ULTI ATIVADA!", '#8b5cf6'); damageEnemy(val, false);
+        }
+    }
+
+    function damageEnemy(val, isCrit, fromPet) {
+        const variance = 1 + Math.floor(Math.random() * (4 + Math.min(6, p.stage / 3)));
+        let d = Math.floor(val + Math.random() * variance);
+        if (fromPet) d = 0;
+        
+        // Aplicar dano passivo do pet
+        const danoPassivo = PetSystem.aplicarDanoPassivo(p, e);
+        if (danoPassivo > 0) {
+            addLog(`Pet causou ${danoPassivo} de dano!`, '#a78bfa');
+        }
+        
+        e.hp -= d;
+        if (isCrit) addLog(`CRÍTICO! ${d} de dano!`, '#f472b6');
+        else if (!fromPet) addLog(`Você causou ${d} de dano!`, '#10b981');
+        if(e.hp <= 0) { 
+            e.alive = false; clearTimeout(turnTimer); 
+            p.stage++;
+            p.killStreak = (p.killStreak || 0) + 1;
+            p.totalKillsLifetime = (p.totalKillsLifetime || 0) + 1;
+            const D = getWorldDifficultyMult(p.world || 1);
+            const baseGold = Math.floor((38 + Math.floor(p.stage * 1.4) + (p.world - 1) * 10) * D.gold);
+            const streakBonus = Math.min(40, (p.killStreak - 1) * 5);
+            const goldGain = baseGold + streakBonus;
+            
+            // Aplicar bônus de ouro do pet
+            const bonusOuro = PetSystem.aplicarBonusOuro(p);
+            const totalGold = goldGain + bonusOuro;
+            
+            p.gold += totalGold;
+            addLog(`Vitória! +${totalGold} ouro${bonusOuro > 0 ? ` (${bonusOuro} do pet)` : ''}`, '#f59e0b');
+            
+            // Verificar se deve oferecer seleção de pets (uma vez por mundo)
+            if (p.stage % 10 === 0 && !p.petWorldOffered) {
+                gamePaused = true;
+                PetSystem.mostrarSelecaoPet(function(petEscolhido) {
+                    PetSystem.escolherPet(p, petEscolhido);
+                    addLog(`Novo pet: ${petEscolhido.emoji} ${petEscolhido.name}!`, '#a78bfa');
+                    p.petWorldOffered = true; // Marcar que já ofereceu pet neste mundo
+                    save();
+                    gamePaused = false;
+                    setTimeout(spawn, 1150);
+                });
+            } 
+            // Verificar se deve oferecer mercante de itens (a cada 5 ondas, terminando em 0)
+            else if (p.stage % 5 === 0) {
+                gamePaused = true;
+                mostrarMercanteItens(function(itemComprado) {
+                    if (itemComprado) {
+                        addLog(`Comprou: ${itemComprado.icon} ${itemComprado.name}!`, '#f59e0b');
+                    }
+                    save();
+                    gamePaused = false;
+                    setTimeout(spawn, 1150);
+                });
+            } 
+            else {
+                setTimeout(spawn, 1150);
+            }
+        }
+        updateUI();
+    }
+
+    function mostrarMercanteItens(callback) {
+        // Itens disponíveis no mercante (diferentes dos pets)
+        const itensDisponiveis = [
+            { id: 'pocao_grande', name: 'Poção Grande', icon: '🧪', price: 80, effect: 'Cura 80 HP' },
+            { id: 'escudo_reforcado', name: 'Escudo Reforçado', icon: '🛡️', price: 120, effect: '+5 DEF base' },
+            { id: 'espada_afiada', name: 'Espada Afiada', icon: '⚔️', price: 180, effect: '+8 ATK base' },
+            { id: 'armadura_leve', name: 'Armadura Leve', icon: '🎽', price: 150, effect: '+10 HP máximo' },
+            { id: 'botas_veloz', name: 'Botas Veloz', icon: '👟', price: 100, effect: '+15% regen stamina' },
+            { id: 'anel_dsorte', name: 'Anel da Sorte', icon: '💍', price: 200, effect: '+3% chance de loot' }
+        ];
+        
+        // Gerar 3 itens aleatórios
+        const opcoes = [];
+        const tempItens = [...itensDisponiveis];
+        while (opcoes.length < 3 && tempItens.length > 0) {
+            const index = Math.floor(Math.random() * tempItens.length);
+            const item = tempItens.splice(index, 1)[0];
+            opcoes.push(item);
+        }
+        
+        // Criar overlay do mercante de itens
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.style.zIndex = '6000';
+        overlay.innerHTML = `
+            <div style="background: var(--panel); padding: 30px; border-radius: 12px; max-width: 800px; text-align: center;">
+                <h2 style="font-family: 'Cinzel'; color: var(--gold); margin: 0 0 20px;">🧙‍♂️ MERCANTE DE ITENS</h2>
+                <p style="color: #94a3b8; margin: 0 0 30px;">Escolha um item para te ajudar na jornada!</p>
+                <p style="color: var(--gold); font-size: 1.1rem; margin: 0 0 20px;">Seu Ouro: <b>${p.gold}</b></p>
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                    ${opcoes.map((item, index) => `
+                        <div class="pet-option" data-index="${index}" style="
+                            background: rgba(255,255,255,0.05);
+                            border: 2px solid var(--border);
+                            border-radius: 12px;
+                            padding: 15px;
+                            cursor: pointer;
+                            transition: 0.3s;
+                            min-width: 200px;
+                        " onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+                            <div style="font-size: 2.5rem; margin-bottom: 8px;">${item.icon}</div>
+                            <h3 style="font-family: 'Cinzel'; color: #f8fafc; margin: 0 0 6px;">${item.name}</h3>
+                            <p style="color: #cbd5e1; font-size: 0.8rem; margin: 0 0 8px;">${item.effect}</p>
+                            <p style="color: var(--gold); font-weight: bold; margin: 0;">Preço: ${item.price} ouro</p>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="btn-menu" onclick="fecharMercanteItens()" style="margin-top: 20px; width: 200px;">NÃO QUERO AGORA</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Adicionar evento de clique
+        overlay.addEventListener('click', function(e) {
+            const itemOption = e.target.closest('.pet-option');
+            if (itemOption) {
+                const index = parseInt(itemOption.dataset.index);
+                const itemEscolhido = opcoes[index];
+                
+                // Verificar se tem ouro suficiente
+                if (p.gold >= itemEscolhido.price) {
+                    p.gold -= itemEscolhido.price;
+                    
+                    // Aplicar efeito do item
+                    const sucesso = aplicarEfeitoItem(itemEscolhido);
+                    
+                    if (sucesso) {
+                        document.body.removeChild(overlay);
+                        callback(itemEscolhido);
+                    }
+                } else {
+                    alert(`Ouro insuficiente! Você precisa de ${itemEscolhido.price} ouro.`);
+                }
+            }
+        });
+        
+        // Função para fechar sem comprar
+        window.fecharMercanteItens = function() {
+            document.body.removeChild(overlay);
+            callback(null);
+        };
+    }
+
+    function aplicarEfeitoItem(item) {
+        switch (item.id) {
+            case 'pocao_grande':
+                p.hp = Math.min(p.mHp, p.hp + 80);
+                addLog(`Usou ${item.name}! (+80 HP)`, '#10b981');
+                break;
+            case 'escudo_reforcado':
+                // Adicionar ao inventário
+                const escudoItem = { id: 'escudo_reforcado', name: item.name, icon: item.icon };
+                if (p.inv.length < 12) {
+                    p.inv.push(escudoItem);
+                    addLog(`Comprou ${item.name}! Adicionado ao inventário.`, '#10b981');
+                } else {
+                    addLog(`Inventário cheio! Não pode comprar ${item.name}.`, '#f43f5e');
+                    p.gold += item.price; // Devolver o ouro
+                    return false;
+                }
+                break;
+            case 'espada_afiada':
+                // Adicionar ao inventário
+                const espadaItem = { id: 'espada_afiada', name: item.name, icon: item.icon };
+                if (p.inv.length < 12) {
+                    p.inv.push(espadaItem);
+                    addLog(`Comprou ${item.name}! Adicionado ao inventário.`, '#10b981');
+                } else {
+                    addLog(`Inventário cheio! Não pode comprar ${item.name}.`, '#f43f5e');
+                    p.gold += item.price; // Devolver o ouro
+                    return false;
+                }
+                break;
+            case 'armadura_leve':
+                // Adicionar ao inventário
+                const armaduraItem = { id: 'armadura_leve', name: item.name, icon: item.icon };
+                if (p.inv.length < 12) {
+                    p.inv.push(armaduraItem);
+                    addLog(`Comprou ${item.name}! Adicionado ao inventário.`, '#10b981');
+                } else {
+                    addLog(`Inventário cheio! Não pode comprar ${item.name}.`, '#f43f5e');
+                    p.gold += item.price; // Devolver o ouro
+                    return false;
+                }
+                break;
+            case 'botas_veloz':
+                // Adicionar ao inventário
+                const botasItem = { id: 'botas_veloz', name: item.name, icon: item.icon };
+                if (p.inv.length < 12) {
+                    p.inv.push(botasItem);
+                    addLog(`Comprou ${item.name}! Adicionado ao inventário.`, '#10b981');
+                } else {
+                    addLog(`Inventário cheio! Não pode comprar ${item.name}.`, '#f43f5e');
+                    p.gold += item.price; // Devolver o ouro
+                    return false;
+                }
+                break;
+            case 'anel_dsorte':
+                // Adicionar ao inventário
+                const anelItem = { id: 'anel_dsorte', name: item.name, icon: item.icon };
+                if (p.inv.length < 12) {
+                    p.inv.push(anelItem);
+                    addLog(`Comprou ${item.name}! Adicionado ao inventário.`, '#10b981');
+                } else {
+                    addLog(`Inventário cheio! Não pode comprar ${item.name}.`, '#f43f5e');
+                    p.gold += item.price; // Devolver o ouro
+                    return false;
+                }
+                break;
+        }
+        return true;
+    }
+
+    function mostrarMercante(callback) {
+        // Usar os pets existentes do jogo (petsDb original)
+        const petsDisponiveis = [
+            { id: 'fox', emoji: '🦊', name: 'Raposa Garimpeira', price: 150, effect: 'Aumenta chance de loot em 10%' },
+            { id: 'slime', emoji: '🟢', name: 'Slime Venenoso', price: 200, effect: 'Causa 5 de dano por turno' },
+            { id: 'wolf', emoji: '🐺', name: 'Lobo de Caça', price: 250, effect: 'Causa 8 de dano por turno' }
+        ];
+        
+        // Gerar 2 pets aleatórios
+        const opcoes = [];
+        const tempPets = [...petsDisponiveis];
+        while (opcoes.length < 2 && tempPets.length > 0) {
+            const index = Math.floor(Math.random() * tempPets.length);
+            const pet = tempPets.splice(index, 1)[0];
+            opcoes.push(pet);
+        }
+        
+        // Criar overlay do mercante
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.style.zIndex = '6000';
+        overlay.innerHTML = `
+            <div style="background: var(--panel); padding: 30px; border-radius: 12px; max-width: 700px; text-align: center;">
+                <h2 style="font-family: 'Cinzel'; color: var(--gold); margin: 0 0 20px;">🧙‍♂️ MERCANTE DE PETS</h2>
+                <p style="color: #94a3b8; margin: 0 0 30px;">Escolha um pet para te ajudar na jornada! Cada pet oferece bônus únicos.</p>
+                <p style="color: var(--gold); font-size: 1.1rem; margin: 0 0 20px;">Seu Ouro: <b>${p.gold}</b></p>
+                <div style="display: flex; gap: 20px; justify-content: center;">
+                    ${opcoes.map((pet, index) => `
+                        <div class="pet-option" data-index="${index}" style="
+                            background: rgba(255,255,255,0.05);
+                            border: 2px solid var(--border);
+                            border-radius: 12px;
+                            padding: 20px;
+                            cursor: pointer;
+                            transition: 0.3s;
+                            min-width: 250px;
+                        " onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+                            <div style="font-size: 3rem; margin-bottom: 10px;">${pet.emoji}</div>
+                            <h3 style="font-family: 'Cinzel'; color: #f8fafc; margin: 0 0 8px;">${pet.name}</h3>
+                            <p style="color: #cbd5e1; font-size: 0.85rem; margin: 0 0 10px;">${pet.effect}</p>
+                            <p style="color: var(--gold); font-weight: bold; margin: 0;">Preço: ${pet.price} ouro</p>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="btn-menu" onclick="fecharMercante()" style="margin-top: 20px; width: 200px;">NÃO QUERO AGORA</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Adicionar evento de clique
+        overlay.addEventListener('click', function(e) {
+            const petOption = e.target.closest('.pet-option');
+            if (petOption) {
+                const index = parseInt(petOption.dataset.index);
+                const petEscolhido = opcoes[index];
+                
+                // Verificar se tem ouro suficiente
+                if (p.gold >= petEscolhido.price) {
+                    p.gold -= petEscolhido.price;
+                    
+                    // Adicionar pet à coleção
+                    if (!p.petsColecao) p.petsColecao = [];
+                    const petExistente = p.petsColecao.find(pet => pet.id === petEscolhido.id);
+                    
+                    if (petExistente) {
+                        // Aumentar nível
+                        petExistente.level = (petExistente.level || 1) + 1;
+                        p.petAtual = petExistente;
+                    } else {
+                        // Novo pet - converter para o formato do PetSystem
+                        const novoPet = {
+                            id: petEscolhido.id,
+                            name: petEscolhido.name,
+                            emoji: petEscolhido.emoji,
+                            category: 'dano', // Todos os pets do mercante são de dano
+                            baseEffect: petEscolhido.id === 'fox' ? 5 : (petEscolhido.id === 'slime' ? 5 : 8),
+                            effectType: 'passive_damage',
+                            level: 1
+                        };
+                        p.petsColecao.push(novoPet);
+                        p.petAtual = novoPet;
+                    }
+                    
+                    // Aplicar efeito do pet
+                    PetSystem.aplicarEfeitoPet(p, p.petAtual);
+                    
+                    document.body.removeChild(overlay);
+                    callback(petEscolhido);
+                } else {
+                    alert(`Ouro insuficiente! Você precisa de ${petEscolhido.price} ouro.`);
+                }
+            }
+        });
+        
+        // Função para fechar sem comprar
+        window.fecharMercante = function() {
+            document.body.removeChild(overlay);
+            callback(null);
+        };
+    }
+
+    function showGameOver() {
+        gamePaused = true;
+        clearTimeout(turnTimer);
+        document.getElementById('gameover-overlay').style.display = 'flex';
+    }
+
+    function gameOverRetry() {
+        document.getElementById('gameover-overlay').style.display = 'none';
+        gamePaused = false;
+        p.alive = true;
+        recalcStats();
+        p.hp = p.mHp;
+        p.stam = p.stamMax != null ? p.stamMax : 100;
+        p.fury = 0;
+        clearTimeout(turnTimer);
+        spawn();
+    }
+
+    function gameOverToMenu() {
+        save();
+        gamePaused = false;
+        document.getElementById('gameover-overlay').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('menu-main').style.display = 'flex';
+        updateMenuButtons();
+    }
+
+    function updateMenuButtons() {
+        const hasSave = getSaveRaw() !== null;
+        document.getElementById('btn-cont').style.display = hasSave ? 'inline-block' : 'none';
+        document.getElementById('btn-config').style.display = hasSave ? 'inline-block' : 'none';
+        document.getElementById('btn-worlds').style.display = hasSave ? 'inline-block' : 'none';
+        
+        // Atualizar hints de mundos
+        const totalKills = p.totalKillsLifetime || 0;
+        document.getElementById('hint-w2').innerText = Math.max(0, WORLD2_UNLOCK_KILLS - totalKills);
+        document.getElementById('hint-w3').innerText = Math.max(0, WORLD3_UNLOCK_KILLS - totalKills);
+    }
+
+    function togglePause() {
+        gamePaused = !gamePaused;
+        const ov = document.getElementById('pause-overlay');
+        ov.style.display = gamePaused ? 'flex' : 'none';
+        if (gamePaused) clearTimeout(turnTimer);
+        else if (e.alive && p.alive && !shopOpen) enemyTurn();
+    }
+
+    function applyWorldTheme() {
+        const meta = getWorldMeta(p.world);
+        const gameUi = document.getElementById('game-ui');
+        WORLDS.forEach(w => gameUi.classList.remove(w.bgClass));
+        gameUi.classList.add(meta.bgClass);
+        document.getElementById('ui-world-label').innerText = `MUNDO ${meta.id} — ${meta.name.toUpperCase()}`;
+        
+        // Resetar controle de pets ao mudar de mundo
+        if (p.world > 1) {
+            p.petWorldOffered = false; // Permite oferecer pet grátis no novo mundo
+        }
+    }
+
+    function enterGameSession() {
+        p.alive = true;
+        gamePaused = false;
+        document.getElementById('pause-overlay').style.display = 'none';
+        document.getElementById('gameover-overlay').style.display = 'none';
+        applyClassBase();
+        recalcStats();
+        
+        // Inicializar sistema de pets
+        PetSystem.inicializarPets(p);
+        
+        document.getElementById('menu-main').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'grid';
+        applyWorldTheme();
+        applyPlayerSprite();
+        ensureStamRegen();
+        spawn();
+    }
+
+    function showMainMenu() {
+        document.getElementById('login-ui').style.display = 'none';
+        document.getElementById('menu-main').style.display = 'flex';
+        if (getSaveRaw()) document.getElementById('btn-cont').style.display = 'block';
+        else document.getElementById('btn-cont').style.display = 'none';
+    }
+
+    function tryLogin() {
+        const u = document.getElementById('login-user').value.trim();
+        const pw = document.getElementById('login-pass').value;
+        const r = DMDB.login(u, pw);
+        if (!r.ok) { alert(r.error); return; }
+        showMainMenu();
+    }
+
+    function tryRegister() {
+        const u = document.getElementById('login-user').value.trim();
+        const pw = document.getElementById('login-pass').value;
+        if (u.length < 2 || pw.length < 2) { alert('Usuário e senha precisam de pelo menos 2 caracteres.'); return; }
+        const r = DMDB.register(u, pw);
+        if (!r.ok) { alert(r.error); return; }
+        alert('Conta criada. Entre com seu usuário e senha.');
+    }
+
+    function doLogout() {
+        DMDB.logout();
+        location.reload();
+    }
+
+    function startGame(mode) {
+        if (mode === 'continue') {
+            const raw = getSaveRaw();
+            if (!raw) return;
+            p = JSON.parse(raw);
+            
+            // Garantir inicialização do sistema de pets
+            if (!p.petsColecao) p.petsColecao = [];
+            if (!p.petAtual) p.petAtual = null;
+            if (p.petWorldOffered === undefined) p.petWorldOffered = false;
+            if (!p.staminaRegenBonus) p.staminaRegenBonus = 0;
+            if (!p.dropChanceBonus) p.dropChanceBonus = 0;
+            if (!p.rareDropBonus) p.rareDropBonus = 0;
+            if (!p.passiveDamage) p.passiveDamage = 0;
+            
+            enterGameSession();
+        } else {
+            p = defaultPlayer(1);
+            enterGameSession();
+        }
+    }
+
+    function openWorldSelect() {
+        document.getElementById('menu-main').style.display = 'none';
+        document.getElementById('world-select-ui').style.display = 'flex';
+        renderWorldCards();
+    }
+
+    function renderWorldCards() {
+        const container = document.getElementById('world-cards');
+        if (!container) return;
+        
+        let html = '';
+        WORLDS.forEach(world => {
+            const unlocked = world.id === 1 || 
+                          (world.id === 2 && (p.totalKillsLifetime || 0) >= WORLD2_UNLOCK_KILLS) ||
+                          (world.id === 3 && (p.totalKillsLifetime || 0) >= WORLD3_UNLOCK_KILLS);
+            
+            const btnClass = unlocked ? 'btn-menu' : 'btn-menu disabled';
+            const btnText = unlocked ? `MUNDO ${world.id}` : 'BLOQUEADO';
+            const btnAction = unlocked ? `onclick="selectWorld(${world.id})"` : '';
+            
+            html += `
+                <div class="world-card" style="
+                    background: rgba(255,255,255,0.05);
+                    border: 2px solid ${unlocked ? 'var(--gold)' : 'var(--border)'};
+                    border-radius: 12px;
+                    padding: 20px;
+                    text-align: center;
+                    margin: 10px;
+                    cursor: ${unlocked ? 'pointer' : 'not-allowed'};
+                    opacity: ${unlocked ? '1' : '0.5'};
+                ">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">${world.emoji}</div>
+                    <h3 style="font-family: 'Cinzel'; color: ${unlocked ? 'var(--gold)' : '#94a3b8'}; margin: 0 0 8px;">${world.name}</h3>
+                    <p style="color: #cbd5e1; font-size: 0.9rem; margin: 0 0 15px;">${world.enemyPrefix}</p>
+                    <button class="${btnClass}" ${btnAction} style="width: 100%; ${!unlocked ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
+                        ${btnText}
+                    </button>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function selectWorld(worldId) {
+        if (worldId === p.world) {
+            closeWorldSelect();
+            return;
+        }
+        
+        p.world = worldId;
+        p.stage = 1;
+        p.maxStageReached = 1;
+        p.petWorldOffered = false; // Reset para permitir pet grátis no novo mundo
+        save();
+        closeWorldSelect();
+        startGame('continue');
+    }
+
+    function closeWorldSelect() {
+        document.getElementById('world-select-ui').style.display = 'none';
+        document.getElementById('menu-main').style.display = 'flex';
+    }
+
+    function saveAndReturnMenu() {
+        save();
+        gamePaused = false;
+        document.getElementById('pause-overlay').style.display = 'none';
+        document.getElementById('gameover-overlay').style.display = 'none';
+        clearTimeout(turnTimer);
+        document.getElementById('game-ui').style.display = 'none';
+        showMainMenu();
+    }
+
+    function closeConfig() {
+        document.getElementById('config-ui').style.display = 'none';
+    }
+
+    function openConfig() {
+        if (!DMDB.isAdmin()) return;
+        const pre = document.getElementById('config-dump');
+        const db = {
+            global: DMDB.getGlobal(),
+            users: DMDB.getUsers().map(u => ({ name: u.name, role: u.role })),
+            saveExists: !!getSaveRaw()
+        };
+        pre.textContent = JSON.stringify(db, null, 2);
+        document.getElementById('config-ui').style.display = 'flex';
+    }
+
+    window.onload = function() {
+        DMDB.init();
+        updateMenuButtons();
+        document.getElementById('hint-w2').textContent = WORLD2_UNLOCK_KILLS;
+        document.getElementById('hint-w3').textContent = WORLD3_UNLOCK_KILLS;
+        if (DMDB.getSession()) showMainMenu();
+        else {
+            document.getElementById('login-ui').style.display = 'flex';
+            document.getElementById('menu-main').style.display = 'none';
+        }
+        const b = document.getElementById('btn-block');
+        ['mousedown', 'touchstart'].forEach(ev => b.addEventListener(ev, () => isDef = true));
+        ['mouseup', 'mouseleave', 'touchend'].forEach(ev => b.addEventListener(ev, () => isDef = false));
+    };
 
 </script>
 </body>

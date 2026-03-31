@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de Módulos</title>
+</head>
+<body>
+    <h1>Teste de Carregamento de Módulos</h1>
+    <div id="output"></div>
+    
+    <script src="js/db.js"></script>
+    <script src="js/Player.js"></script>
+    <script src="js/Enemy.js"></script>
+    <script src="js/UI.js"></script>
+    <script>
+        window.onload = function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<h2>Resultados:</h2>';
+            
+            // Testar se os módulos carregaram
+            const tests = [
+                { name: 'PlayerModule', test: !!window.PlayerModule },
+                { name: 'EnemyModule', test: !!window.EnemyModule },
+                { name: 'UIModule', test: !!window.UIModule },
+                { name: 'PlayerModule.defaultPlayer', test: !!window.PlayerModule?.defaultPlayer },
+                { name: 'EnemyModule.spawn', test: !!window.EnemyModule?.spawn },
+                { name: 'UIModule.updateUI', test: !!window.UIModule?.updateUI }
+            ];
+            
+            tests.forEach(test => {
+                const status = test.test ? '✅ OK' : '❌ FALHOU';
+                output.innerHTML += `<p>${test.name}: ${status}</p>`;
+            });
+            
+            // Testar criação de jogador
+            try {
+                const player = window.PlayerModule.defaultPlayer(1);
+                output.innerHTML += `<p>Criação de jogador: ✅ OK (HP: ${player.hp})</p>`;
+            } catch(e) {
+                output.innerHTML += `<p>Criação de jogador: ❌ FALHOU (${e.message})</p>`;
+            }
+        };
+    </script>
+</body>
+</html>

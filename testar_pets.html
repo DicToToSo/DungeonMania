@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste Sistema de Pets</title>
+</head>
+<body>
+    <h1>Teste do Sistema de Pets</h1>
+    <div id="resultado"></div>
+    
+    <script src="js/db.js"></script>
+    <script src="js/PetSystem.js"></script>
+    <script>
+        window.onload = function() {
+            const resultado = document.getElementById('resultado');
+            let html = '<h2>Resultados:</h2>';
+            
+            // Testar se PetSystem carregou
+            html += `<p>PetSystem carregado: ${typeof PetSystem !== 'undefined' ? '✅' : '❌'}</p>`;
+            
+            if (typeof PetSystem !== 'undefined') {
+                html += `<p>Funções disponíveis: ${Object.keys(PetSystem).join(', ')}</p>`;
+                
+                // Testar inicialização
+                const playerTeste = {
+                    petsColecao: [],
+                    petAtual: null,
+                    staminaRegenBonus: 0,
+                    dropChanceBonus: 0,
+                    rareDropBonus: 0,
+                    passiveDamage: 0
+                };
+                
+                try {
+                    PetSystem.inicializarPets(playerTeste);
+                    html += '<p>✅ Inicialização funcionou</p>';
+                    
+                    // Testar geração de opções
+                    const opcoes = PetSystem.gerarOpcoesPets();
+                    html += `<p>✅ Geração de opções: ${opcoes.length} pets gerados</p>`;
+                    
+                    // Testar aplicação de efeito
+                    if (opcoes.length > 0) {
+                        PetSystem.escolherPet(playerTeste, opcoes[0]);
+                        html += '<p>✅ Escolha de pet funcionou</p>';
+                        html += `<p>Pet atual: ${playerTeste.petAtual ? playerTeste.petAtual.name : 'Nenhum'}</p>`;
+                    }
+                    
+                } catch (error) {
+                    html += `<p>❌ Erro: ${error.message}</p>`;
+                }
+            }
+            
+            resultado.innerHTML = html;
+        };
+    </script>
+</body>
+</html>
